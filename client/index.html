@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Thermal Camera Controller</title>
+    <link rel="stylesheet" href="bulma.css">
+    <script src="protobuf.js"></script>
+</head>
+<body>
+    <section class="section">
+        <div class="container">
+            <h1 class="title">Thermal Camera Controller</h1>
+
+            <div class="field">
+                <label class="label">Zoom Level</label>
+                <div class="control">
+                    <div class="select">
+                        <select id="zoom-level">
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label">Color Scheme</label>
+                <div class="control">
+                    <div class="select">
+                        <select id="color-scheme">
+                            <option value="SEPIA">Sepia</option>
+                            <option value="HOT_WHITE">Hot White</option>
+                            <option value="HOT_BLACK">Hot Black</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label">Server Time</label>
+                <div class="control">
+                    <input class="input" type="text" id="server-time" readonly>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script src="client.js"></script>
+</body>
+</html>

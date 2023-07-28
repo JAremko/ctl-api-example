@@ -1,0 +1,14 @@
+version: '3'
+services:
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    image: ctl-api-example-client
+    network_mode: host
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    image: ctl-api-example-server
+    network_mode: host
