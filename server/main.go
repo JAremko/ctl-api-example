@@ -10,91 +10,159 @@ import (
 	"github.com/JAremko/ctl-api-example/thermalcamera"
 )
 
-// WriteRequest wraps the WebSocket message type and data.
+// WriteRequest is used to wrap WebSocket messages.
 type WriteRequest struct {
 	messageType int
 	data        []byte
 }
 
-// ConnectionWrapper wraps a WebSocket connection and a channel for write requests.
+// ConnectionWrapper encapsulates a WebSocket connection and a channel for write requests.
 type ConnectionWrapper struct {
 	conn         *websocket.Conn
 	writeChannel chan WriteRequest
+	stopChannel  chan struct{} // Channel to signal stopping of goroutines
 }
 
-// WriteHandler processes write requests for the WebSocket connection.
+// WriteHandler listens for WriteRequests and writes them to the WebSocket.
 func (cw *ConnectionWrapper) WriteHandler() {
-	for writeReq := range cw.writeChannel {
-		if err := cw.conn.WriteMessage(writeReq.messageType, writeReq.data); err != nil {
-			log.Println(err)
+	for {
+		select {
+		case <-cw.stopChannel: // If stop signal received, exit goroutine
 			return
+		case writeReq, ok := <-cw.writeChannel:
+			if !ok {
+				return // Channel was closed, so exit
+			}
+			if err := cw.conn.WriteMessage(writeReq.messageType, writeReq.data); err != nil {
+				log.Println(err)
+				return
+			}
 		}
 	}
 }
 
-// handleChargeStream reads packets from C and sends them as WebSocket messages.
-func handleChargeStream(cw *ConnectionWrapper) {
+// handlePacketsFromC reads packets from C and sends them as WebSocket messages.
+func handlePacketsFromC(cw *ConnectionWrapper) error {
 	for {
 		packet, err := ReceivePacketFromC()
 		if err != nil {
-			log.Println("Go Error receiving packet:", err)
-			return
+			log.Println("Error receiving packet:", err)
+			return err
 		}
 
-		payload := &thermalcamera.StreamChargeResponse{
-			Charge: int32(binary.LittleEndian.Uint32(packet.Payload[:])),
+		switch packet.ID {
+		case CHARGE_PACKET:
+			handleChargePacket(cw, packet)
+		// You can add more cases here to handle other packet types
+		default:
+			log.Println("Unknown packet ID:", packet.ID)
 		}
-		message, err := proto.Marshal(payload)
-		if err != nil {
-			log.Println("Go Error marshaling payload:", err)
-			return
-		}
-		cw.writeChannel <- WriteRequest{websocket.BinaryMessage, message}
 	}
+}
+
+// handleChargePacket handles a charge packet, constructs a response payload and sends it as a WebSocket message.
+func handleChargePacket(cw *ConnectionWrapper, packet *Packet) {
+	payload := &thermalcamera.StreamChargeResponse{
+		Charge: int32(binary.LittleEndian.Uint32(packet.Payload[:])),
+	}
+	message, err := proto.Marshal(payload)
+	if err != nil {
+		log.Println("Error marshaling payload:", err)
+		return
+	}
+
+	// Safely send to writeChannel or return if stop signal received
+	select {
+	case <-cw.stopChannel:
+		// Connection was closed, so return without writing
+		return
+	case cw.writeChannel <- WriteRequest{websocket.BinaryMessage, message}:
+		// Successfully sent
+	}
+}
+
+// handleSetZoomLevel handles the SetZoomLevel command.
+func handleSetZoomLevel(level int32) {
+	log.Println("SetZoomLevel command received with level", level)
+	SendPacketToC(SET_ZOOM_LEVEL, level)
+}
+
+// handleSetColorScheme handles the SetColorScheme command.
+func handleSetColorScheme(scheme thermalcamera.ColorScheme) {
+	log.Println("SetColorScheme command received with scheme", thermalcamera.ColorScheme_name[int32(scheme)])
+	SendPacketToC(SET_COLOR_SCHEME, int32(scheme))
 }
 
 // handleConnection manages a WebSocket connection, including reading and writing messages.
 func handleConnection(conn *websocket.Conn) {
-	cw := &ConnectionWrapper{conn: conn, writeChannel: make(chan WriteRequest)}
-	defer conn.Close()
-	defer close(cw.writeChannel)
+	// Initialize ConnectionWrapper with channels
+	cw := &ConnectionWrapper{conn: conn, writeChannel: make(chan WriteRequest), stopChannel: make(chan struct{})}
+	defer func() {
+		conn.WriteMessage(websocket.CloseMessage, []byte{}) // Explicitly send a close message
+		conn.Close()
+		close(cw.stopChannel)  // Close stopChannel to signal stopping of related goroutines
+		close(cw.writeChannel)
+	}()
 
-	log.Println("Go: Upgraded to websocket connection")
+	log.Println("Upgraded to WebSocket connection")
 
-	go cw.WriteHandler()          // Start the write handler in a new goroutine.
-	go handleChargeStream(cw) // Start the charge stream handler in a new goroutine.
+	errorChannel := make(chan error, 1)
+	go cw.WriteHandler()
+	// Run the packets handler in a new goroutine, listening for errors
+	go func() {
+		if err := handlePacketsFromC(cw); err != nil {
+			errorChannel <- err
+		}
+	}()
 
+	// Main loop to handle incoming messages from the WebSocket connection
 	for {
-		messageType, message, err := conn.ReadMessage()
-		if err != nil {
-			log.Println(err)
+		select {
+		case err := <-errorChannel:
+			log.Println("Error in stream handling:", err)
 			return
-		}
+		default:
+			messageType, message, err := conn.ReadMessage()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			switch messageType {
+			case websocket.BinaryMessage:
+				var payload thermalcamera.Command
+				err = proto.Unmarshal(message, &payload)
+				if err != nil {
+					log.Println("Error unmarshaling payload:", err)
+					continue
+				}
 
-		var payload thermalcamera.Command
-		err = proto.Unmarshal(message, &payload)
-		if err != nil {
-			log.Println("Go Error unmarshaling payload:", err)
-			continue
+				// Switch on the specific command type and handle it
+				switch x := payload.CommandType.(type) {
+				case *thermalcamera.Command_SetZoomLevel:
+					handleSetZoomLevel(int32(x.SetZoomLevel.Level))
+				case *thermalcamera.Command_SetColorScheme:
+					handleSetColorScheme(x.SetColorScheme.Scheme)
+				}
+			case websocket.TextMessage:
+				log.Println("Received text message:", string(message))
+			case websocket.CloseMessage:
+				log.Println("Received close message")
+				return
+			case websocket.PingMessage:
+				log.Println("Received ping message")
+				conn.WriteMessage(websocket.PongMessage, []byte{})
+			case websocket.PongMessage:
+				log.Println("Received pong message")
+			default:
+				log.Println("Unknown message type:", messageType)
+			}
 		}
-
-		switch x := payload.CommandType.(type) { // Handle specific command types.
-		case *thermalcamera.Command_SetZoomLevel:
-			log.Println("Go SetZoomLevel command received with level", x.SetZoomLevel.Level)
-			SendPacketToC(SET_ZOOM_LEVEL, int32(x.SetZoomLevel.Level))
-		case *thermalcamera.Command_SetColorScheme:
-			log.Println("Go SetColorScheme command received with scheme",
-				thermalcamera.ColorScheme_name[int32(x.SetColorScheme.Scheme)])
-			SendPacketToC(SET_COLOR_SCHEME, int32(x.SetColorScheme.Scheme))
-		}
-
-		cw.writeChannel <- WriteRequest{messageType, message}
 	}
 }
 
-// echo handles HTTP requests by upgrading them to WebSocket connections.
+// echo upgrades HTTP requests to WebSocket connections.
 func echo(w http.ResponseWriter, r *http.Request) {
-	log.Println("Go: Incoming connection from:", r.RemoteAddr)
+	log.Println("Incoming connection from:", r.RemoteAddr)
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -102,20 +170,19 @@ func echo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go handleConnection(conn) // Start handling the connection in a new goroutine.
+	go handleConnection(conn) // Start handling the connection in a new goroutine
 }
 
 // upgrader is used to upgrade HTTP connections to WebSocket connections.
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true }, // Allow connections from any origin.
+	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
 func main() {
-	initPipes()              // Initialize the named pipes for communication with C.
-	defer closePipes()       // Ensure that the pipes are closed when the main function returns.
-
-	http.HandleFunc("/", echo) // Register the echo handler for HTTP requests.
-	log.Fatal(http.ListenAndServe(":8085", nil)) // Start the HTTP server on port 8085.
+	initPipes()              // Initialize the pipes for communication with C
+	defer closePipes()       // Ensure that the pipes are closed when the main function returns
+	http.HandleFunc("/", echo) // Register the echo handler for HTTP requests
+	log.Fatal(http.ListenAndServe(":8085", nil)) // Start the HTTP server on port 8085
 }

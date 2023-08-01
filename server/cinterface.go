@@ -7,17 +7,17 @@ import (
 	"unsafe"
 )
 
-// Constants used for communication between Go and C.
+// Constants for communication between Go and C.
 const (
-	PIPE_NAME_TO_C         = "/tmp/toC"
-	PIPE_NAME_FROM_C       = "/tmp/fromC"
-	SET_ZOOM_LEVEL         = 1
-	SET_COLOR_SCHEME       = 2
-	STREAM_CHARGE_RESPONSE = 3
-	PayloadSize            = 64
+	PIPE_NAME_TO_C   = "/tmp/toC"
+	PIPE_NAME_FROM_C = "/tmp/fromC"
+	SET_ZOOM_LEVEL   = 1
+	SET_COLOR_SCHEME = 2
+	CHARGE_PACKET    = 3
+	PayloadSize      = 64
 )
 
-// Packet represents a packet to be sent or received.
+// Packet represents a data packet to be sent or received.
 type Packet struct {
 	ID      uint32
 	Payload [PayloadSize]byte
@@ -31,11 +31,11 @@ func initPipes() {
 	var err error
 	pipeFromC, err = os.Open(PIPE_NAME_FROM_C)
 	if err != nil {
-		log.Fatal(err) // Log the error and exit if there's a problem opening the pipe.
+		log.Fatal(err)
 	}
 	pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe)
 	if err != nil {
-		log.Fatal(err) // Log the error and exit if there's a problem opening the pipe.
+		log.Fatal(err)
 	}
 }
 
@@ -57,13 +57,15 @@ func ReceivePacketFromC() (*Packet, error) {
 func SendPacketToC(packetID uint32, value int32) error {
 	var packet Packet
 	packet.ID = packetID
-	binary.LittleEndian.PutUint32(packet.Payload[:], uint32(value))
+	binary.LittleEndian.PutUint32(packet.Payload[:4], uint32(value))
 
 	_, err := pipeToC.Write((*[PayloadSize + 4]byte)(unsafe.Pointer(&packet))[:])
 	if err != nil {
 		pipeToC.Close()
-		pipeToC, _ = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe) // Reopen the pipe if an error occurs.
-		return err
+		pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe) // Reopen the pipe if an error occurs.
+		if err != nil { // Handle the error if reopening also fails
+			return err
+		}
 	}
 	return nil
 }
