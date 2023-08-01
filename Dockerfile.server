@@ -1,12 +1,8 @@
-# Builder stage
-FROM golang:latest as builder
+# Builder stage for Go
+FROM golang:latest as go-builder
 
 # Install the protobuf compiler
 RUN apt-get update && apt-get -y install protobuf-compiler
-
-# Install protobuf compiler
-RUN apt-get update && \
-    apt-get install -y protobuf-compiler
 
 # Install Go protobuf plugin
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
@@ -24,7 +20,7 @@ RUN go mod init github.com/JAremko/ctl-api-example
 COPY thermalcamera.proto .
 
 # Copy the server code
-COPY server .
+COPY server/main.go .
 
 # Download all dependencies.
 RUN go get github.com/gorilla/websocket
@@ -42,15 +38,36 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o server
 
 RUN chmod +x server
 
+# Builder stage for C
+FROM gcc:latest as c-builder
+
+WORKDIR /c_code
+
+# Copy C code
+COPY server/main.c .
+
+# Compile C code
+RUN gcc -o c_server main.c
+
+RUN chmod +x c_server
 
 # Final stage
-FROM scratch
+FROM debian:latest
 
-# Copy the standalone executable from the builder image
-COPY --from=builder /ctl-api-example/server /app/server
+# Copy the standalone executable from the builder images
+COPY --from=go-builder /ctl-api-example/server /app/server
+COPY --from=c-builder /c_code/c_server /app/c_server
+COPY server/start.sh /app/start.sh
+
+# Install necessary utilities
+RUN apt-get update && apt-get install -y \
+    procps \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN chmod +x /app/start.sh
 
 EXPOSE 8085
 
 # Set the working directory and command for running the application
 WORKDIR /app
-CMD ["./server"]
+CMD ["/bin/bash", "/app/start.sh"]
