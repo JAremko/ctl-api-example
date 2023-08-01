@@ -8,7 +8,6 @@ message Command {
     oneof command_type {
         SetZoomLevel set_zoom_level = 1;
         SetColorScheme set_color_scheme = 2;
-        GetHumidity get_humidity = 3;
     }
 }
 
@@ -20,18 +19,13 @@ message SetColorScheme {
     ColorScheme scheme = 1;
 }
 
-message GetHumidity {
-    bool request = 1;
-}
-
-message StreamTimeResponse {
-    string time = 1;
+message StreamChargeResponse {
+    int32 charge = 1; // Represented as percentage
 }
 
 enum ColorScheme {
     UNKNOWN = 0;
-    RED = 1;
-    GREEN = 2;
-    BLUE = 3;
-    GRAYSCALE = 4;
+    SEPIA = 1;
+    BLACK_HOT = 2;
+    WHITE_HOT = 3;
 }

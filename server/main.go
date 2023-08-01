@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"math/rand"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/websocket"
@@ -11,18 +12,21 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize: 1024,
+	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
-func handleTimeStream(conn *websocket.Conn) {
+func handleChargeStream(conn *websocket.Conn) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		payload := &thermalcamera.StreamTimeResponse{
-			Time: time.Now().Format(time.RFC3339),
+		// Simulating battery charge value
+		charge := rand.Int31n(101)
+
+		payload := &thermalcamera.StreamChargeResponse{ // Corrected here
+			Charge: charge,
 		}
 		message, err := proto.Marshal(payload)
 		if err != nil {
@@ -41,7 +45,7 @@ func handleConnection(conn *websocket.Conn) {
 
 	log.Println("Upgraded to websocket connection")
 
-	go handleTimeStream(conn)
+	go handleChargeStream(conn)
 
 	for {
 		messageType, message, err := conn.ReadMessage()
@@ -64,8 +68,6 @@ func handleConnection(conn *websocket.Conn) {
 		case *thermalcamera.Command_SetColorScheme:
 			log.Println("SetColorScheme command received with scheme",
 				thermalcamera.ColorScheme_name[int32(x.SetColorScheme.Scheme)])
-		case *thermalcamera.Command_GetHumidity:
-			log.Println("GetHumidity command received")
 		}
 
 		if err := conn.WriteMessage(messageType, message); err != nil {

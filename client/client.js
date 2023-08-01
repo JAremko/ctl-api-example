@@ -1,33 +1,36 @@
 const zoomLevelSelect = document.getElementById('zoom-level');
 const colorSchemeSelect = document.getElementById('color-scheme');
-const serverTimeInput = document.getElementById('server-time');
+const chargeProgressBar = document.getElementById('charge-progress');
+const chargePercentage = document.getElementById('charge-percentage');
 
 const ColorScheme = {
     "UNKNOWN": 0,
-    "RED": 1,
-    "GREEN": 2,
-    "BLUE": 3,
-    "GRAYSCALE": 4
+    "SEPIA": 1,
+    "BLACK_HOT": 2,
+    "WHITE_HOT": 3
 };
 
 let Command;
 let SetZoomLevel;
 let SetColorScheme;
-let StreamTimeResponse;
+let StreamChargeResponse;
 
 protobuf.load("thermalcamera.proto").then(root => {
     Command = root.lookup("thermalcamera.Command");
     SetZoomLevel = root.lookup("thermalcamera.SetZoomLevel");
     SetColorScheme = root.lookup("thermalcamera.SetColorScheme");
-    StreamTimeResponse = root.lookup("thermalcamera.StreamTimeResponse");
+    StreamChargeResponse = root.lookup("thermalcamera.StreamChargeResponse");
 }).catch(error => console.error("Failed to load protobuf definitions:", error));
 
 const socket = new WebSocket("ws://localhost:8085");
 socket.binaryType = "arraybuffer";
 
 socket.onmessage = event => {
-    const response = StreamTimeResponse.decode(new Uint8Array(event.data));
-    serverTimeInput.value = response.time;
+    const response = StreamChargeResponse.decode(new Uint8Array(event.data));
+    const charge = response.charge;
+    const chargeBar = document.getElementById('charge-bar');
+    chargeBar.style.width = `${charge}%`;
+    chargePercentage.textContent = `${charge}%`;
 };
 
 zoomLevelSelect.onchange = () => {
