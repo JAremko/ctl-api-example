@@ -8,6 +8,7 @@ RUN apt-get update && apt-get -y install protobuf-compiler
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
+# Add Go binaries to PATH
 ENV PATH=$PATH:/go/bin
 
 # Set the working directory in the Docker image
@@ -16,14 +17,12 @@ WORKDIR /ctl-api-example
 # Initialize a Go module
 RUN go mod init github.com/JAremko/ctl-api-example
 
-# Copy the proto file from the current directory to the working directory in the Docker image
+# Copy the proto file and server code into the Docker image
 COPY thermalcamera.proto .
-
-# Copy the server code
 COPY server/main.go .
 COPY server/cinterface.go .
 
-# Download all dependencies.
+# Download all dependencies
 RUN go get github.com/gorilla/websocket
 RUN go get github.com/golang/protobuf/proto
 RUN go get google.golang.org/grpc
@@ -37,31 +36,36 @@ RUN mkdir -p thermalcamera && \
 # Build the Go app
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o server
 
+# Make the server executable
 RUN chmod +x server
 
 # Builder stage for C
 FROM gcc:latest as c-builder
 
+# Set the working directory for C code
 WORKDIR /c_code
 
-# Copy C code
+# Copy C code into the Docker image
 COPY server/main.c .
 
-# Compile C code
+# Compile C code with pthread support
 RUN gcc -o c_server main.c -lpthread
 
+# Make the C server executable
 RUN chmod +x c_server
 
 # Final stage
 FROM ubuntu:latest
 
-# Copy the standalone executable from the builder images
+# Copy the standalone executables from the builder images
 COPY --from=go-builder /ctl-api-example/server /app/server
 COPY --from=c-builder /c_code/c_server /app/c_server
 COPY server/start.sh /app/start.sh
 
+# Make the start script executable
 RUN chmod +x /app/start.sh
 
+# Expose the port the app runs on
 EXPOSE 8085
 
 # Set the working directory and command for running the application
