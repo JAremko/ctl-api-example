@@ -11,9 +11,9 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
+	ReadBufferSize: 1024,
 	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true }, // Allow connection from any origin
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 func handleTimeStream(conn *websocket.Conn) {
@@ -36,17 +36,10 @@ func handleTimeStream(conn *websocket.Conn) {
 	}
 }
 
-func echo(w http.ResponseWriter, r *http.Request) {
-    log.Println("Incoming connection from:", r.RemoteAddr)
-
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+func handleConnection(conn *websocket.Conn) {
 	defer conn.Close()
 
-    log.Println("Upgraded to websocket connection")
+	log.Println("Upgraded to websocket connection")
 
 	go handleTimeStream(conn)
 
@@ -64,11 +57,13 @@ func echo(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		switch x := payload.MessageType.(type) {
+		switch x := payload.CommandType.(type) {
 		case *thermalcamera.Command_SetZoomLevel:
-			log.Println("SetZoomLevel command received with level", x.SetZoomLevel.Level)
+			log.Println("SetZoomLevel command received with level",
+				x.SetZoomLevel.Level)
 		case *thermalcamera.Command_SetColorScheme:
-			log.Println("SetColorScheme command received with scheme", x.SetColorScheme.Scheme)
+			log.Println("SetColorScheme command received with scheme",
+				thermalcamera.ColorScheme_name[int32(x.SetColorScheme.Scheme)])
 		case *thermalcamera.Command_GetHumidity:
 			log.Println("GetHumidity command received")
 		}
@@ -78,6 +73,18 @@ func echo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func echo(w http.ResponseWriter, r *http.Request) {
+	log.Println("Incoming connection from:", r.RemoteAddr)
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	go handleConnection(conn)
 }
 
 func main() {

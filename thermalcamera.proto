@@ -4,50 +4,34 @@ package thermalcamera;
 
 option go_package = "github.com/JAremko/ctl-api-example/thermalcamera";
 
-service ThermalCameraService {
-    rpc SetZoomLevel(SetZoomLevelRequest) returns (SetZoomLevelResponse) {}
-    rpc SetColorScheme(SetColorSchemeRequest) returns (SetColorSchemeResponse) {}
-    rpc GetHumidity(GetHumidityRequest) returns (GetHumidityResponse) {}
-    rpc StreamTime(StreamTimeRequest) returns (stream StreamTimeResponse) {}
+message Command {
+    oneof command_type {
+        SetZoomLevel set_zoom_level = 1;
+        SetColorScheme set_color_scheme = 2;
+        GetHumidity get_humidity = 3;
+    }
 }
 
-message SetZoomLevelRequest {
+message SetZoomLevel {
     int32 level = 1;
 }
 
-message SetZoomLevelResponse {
-    string message = 1;
+message SetColorScheme {
+    ColorScheme scheme = 1;
 }
 
-message SetColorSchemeRequest {
-    enum Scheme {
-        SEPIA = 0;
-        HOT_WHITE = 1;
-        HOT_BLACK = 2;
-    }
-    Scheme scheme = 1;
+message GetHumidity {
+    bool request = 1;
 }
-
-message SetColorSchemeResponse {
-    string message = 1;
-}
-
-message GetHumidityRequest {}
-
-message GetHumidityResponse {
-    float humidity = 1;
-}
-
-message StreamTimeRequest {}
 
 message StreamTimeResponse {
     string time = 1;
 }
 
-message Command {
-    oneof message_type {
-        SetZoomLevelRequest set_zoom_level = 1;
-        SetColorSchemeRequest set_color_scheme = 2;
-        GetHumidityRequest get_humidity = 3;
-    }
+enum ColorScheme {
+    UNKNOWN = 0;
+    RED = 1;
+    GREEN = 2;
+    BLUE = 3;
+    GRAYSCALE = 4;
 }

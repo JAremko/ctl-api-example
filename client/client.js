@@ -2,15 +2,23 @@ const zoomLevelSelect = document.getElementById('zoom-level');
 const colorSchemeSelect = document.getElementById('color-scheme');
 const serverTimeInput = document.getElementById('server-time');
 
+const ColorScheme = {
+    "UNKNOWN": 0,
+    "RED": 1,
+    "GREEN": 2,
+    "BLUE": 3,
+    "GRAYSCALE": 4
+};
+
 let Command;
-let SetZoomLevelRequest;
-let SetColorSchemeRequest;
+let SetZoomLevel;
+let SetColorScheme;
 let StreamTimeResponse;
 
 protobuf.load("thermalcamera.proto").then(root => {
     Command = root.lookup("thermalcamera.Command");
-    SetZoomLevelRequest = root.lookup("thermalcamera.SetZoomLevelRequest");
-    SetColorSchemeRequest = root.lookup("thermalcamera.SetColorSchemeRequest");
+    SetZoomLevel = root.lookup("thermalcamera.SetZoomLevel");
+    SetColorScheme = root.lookup("thermalcamera.SetColorScheme");
     StreamTimeResponse = root.lookup("thermalcamera.StreamTimeResponse");
 }).catch(error => console.error("Failed to load protobuf definitions:", error));
 
@@ -23,31 +31,15 @@ socket.onmessage = event => {
 };
 
 zoomLevelSelect.onchange = () => {
-    try {
-        console.log("Creating SetZoomLevel message");
-        const setZoomLevelMessage = SetZoomLevelRequest.create({ level: parseInt(zoomLevelSelect.value) });
-        console.log("Creating Command message");
-        const commandZoomLevel = Command.create({ setZoomLevel: setZoomLevelMessage });
-        console.log("Encoding Command message");
-        const commandZoomLevelBuffer = Command.encode(commandZoomLevel).finish();
-        console.log("Sending message");
-        socket.send(commandZoomLevelBuffer);
-    } catch (error) {
-        console.error("Error during zoomLevelSelect onchange:", error);
-    }
+    const setZoomLevelMessage = SetZoomLevel.create({ level: parseInt(zoomLevelSelect.value) });
+    const commandZoomLevel = Command.create({ setZoomLevel: setZoomLevelMessage });
+    const buffer = Command.encode(commandZoomLevel).finish();
+    socket.send(buffer);
 };
 
 colorSchemeSelect.onchange = () => {
-    try {
-        console.log("Creating SetColorScheme message");
-        const setColorSchemeMessage = SetColorSchemeRequest.create({ scheme: colorSchemeSelect.value });
-        console.log("Creating Command message");
-        const commandColorScheme = Command.create({ setColorScheme: setColorSchemeMessage });
-        console.log("Encoding Command message");
-        const commandColorSchemeBuffer = Command.encode(commandColorScheme).finish();
-        console.log("Sending message");
-        socket.send(commandColorSchemeBuffer);
-    } catch (error) {
-        console.error("Error during colorSchemeSelect onchange:", error);
-    }
+    const setColorSchemeMessage = SetColorScheme.create({ scheme: ColorScheme[colorSchemeSelect.value] });
+    const commandColorScheme = Command.create({ setColorScheme: setColorSchemeMessage });
+    const buffer = Command.encode(commandColorScheme).finish();
+    socket.send(buffer);
 };
