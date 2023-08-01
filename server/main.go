@@ -4,39 +4,36 @@ import (
 	"encoding/binary"
 	"log"
 	"net/http"
-	"os"
-	"unsafe"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/websocket"
 	"github.com/JAremko/ctl-api-example/thermalcamera"
 )
 
-const (
-	PIPE_NAME_TO_C      = "/tmp/toC"
-	PIPE_NAME_FROM_C    = "/tmp/fromC"
-	SET_ZOOM_LEVEL      = 1
-	SET_COLOR_SCHEME    = 2
-	STREAM_CHARGE_RESPONSE = 3
-)
-
-type Packet struct {
-	ID      uint32
-	Payload [4]byte
+type WriteRequest struct {
+	messageType int
+	data        []byte
 }
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
+type ConnectionWrapper struct {
+	conn         *websocket.Conn
+	writeChannel chan WriteRequest
 }
 
-func handleChargeStream(conn *websocket.Conn) {
+func (cw *ConnectionWrapper) WriteHandler() {
+	for writeReq := range cw.writeChannel {
+		if err := cw.conn.WriteMessage(writeReq.messageType, writeReq.data); err != nil {
+			log.Println(err)
+			return
+		}
+	}
+}
+
+func handleChargeStream(cw *ConnectionWrapper) {
 	for {
-		var packet Packet
-		err := receivePacketFromC(&packet)
+		packet, err := ReceivePacketFromC()
 		if err != nil {
-			log.Println("Error receiving packet:", err)
+			log.Println("Go Error receiving packet:", err)
 			return
 		}
 
@@ -45,46 +42,22 @@ func handleChargeStream(conn *websocket.Conn) {
 		}
 		message, err := proto.Marshal(payload)
 		if err != nil {
-			log.Println("Error marshaling payload:", err)
+			log.Println("Go Error marshaling payload:", err)
 			return
 		}
-		if err := conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
-			log.Println(err)
-			return
-		}
+		cw.writeChannel <- WriteRequest{websocket.BinaryMessage, message}
 	}
-}
-
-func receivePacketFromC(packet *Packet) error {
-	pipeFromC, err := os.Open(PIPE_NAME_FROM_C)
-	if err != nil {
-		return err
-	}
-	defer pipeFromC.Close()
-
-	var buf [8]byte
-	if _, err := pipeFromC.Read(buf[:]); err != nil {
-		return err
-	}
-	packet.ID = binary.LittleEndian.Uint32(buf[:4])
-	copy(packet.Payload[:], buf[4:])
-
-	return nil
 }
 
 func handleConnection(conn *websocket.Conn) {
+	cw := &ConnectionWrapper{conn: conn, writeChannel: make(chan WriteRequest)}
 	defer conn.Close()
+	defer close(cw.writeChannel)
 
-	log.Println("Upgraded to websocket connection")
+	log.Println("Go: Upgraded to websocket connection")
 
-	pipeToC, err := os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	defer pipeToC.Close()
-
-	go handleChargeStream(conn)
+	go cw.WriteHandler()
+	go handleChargeStream(cw)
 
 	for {
 		messageType, message, err := conn.ReadMessage()
@@ -96,39 +69,26 @@ func handleConnection(conn *websocket.Conn) {
 		var payload thermalcamera.Command
 		err = proto.Unmarshal(message, &payload)
 		if err != nil {
-			log.Println("Error unmarshaling payload:", err)
+			log.Println("Go Error unmarshaling payload:", err)
 			continue
 		}
 
 		switch x := payload.CommandType.(type) {
 		case *thermalcamera.Command_SetZoomLevel:
-			log.Println("SetZoomLevel command received with level", x.SetZoomLevel.Level)
-			sendPacketToC(pipeToC, SET_ZOOM_LEVEL, int32(x.SetZoomLevel.Level))
+			log.Println("Go SetZoomLevel command received with level", x.SetZoomLevel.Level)
+			SendPacketToC(SET_ZOOM_LEVEL, int32(x.SetZoomLevel.Level))
 		case *thermalcamera.Command_SetColorScheme:
-			log.Println("SetColorScheme command received with scheme",
+			log.Println("Go SetColorScheme command received with scheme",
 				thermalcamera.ColorScheme_name[int32(x.SetColorScheme.Scheme)])
-			sendPacketToC(pipeToC, SET_COLOR_SCHEME, int32(x.SetColorScheme.Scheme))
+			SendPacketToC(SET_COLOR_SCHEME, int32(x.SetColorScheme.Scheme))
 		}
 
-		if err := conn.WriteMessage(messageType, message); err != nil {
-			log.Println(err)
-			return
-		}
-	}
-}
-
-func sendPacketToC(pipeToC *os.File, packetID uint32, value int32) {
-	var packet Packet
-	packet.ID = packetID
-	binary.LittleEndian.PutUint32(packet.Payload[:], uint32(value))
-
-	if _, err := pipeToC.Write((*[8]byte)(unsafe.Pointer(&packet))[:]); err != nil {
-		log.Println(err)
+		cw.writeChannel <- WriteRequest{messageType, message}
 	}
 }
 
 func echo(w http.ResponseWriter, r *http.Request) {
-	log.Println("Incoming connection from:", r.RemoteAddr)
+	log.Println("Go: Incoming connection from:", r.RemoteAddr)
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -139,7 +99,16 @@ func echo(w http.ResponseWriter, r *http.Request) {
 	go handleConnection(conn)
 }
 
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+
 func main() {
+	initPipes()
+	defer closePipes()
+
 	http.HandleFunc("/", echo)
 	log.Fatal(http.ListenAndServe(":8085", nil))
 }

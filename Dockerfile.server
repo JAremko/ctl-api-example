@@ -21,6 +21,7 @@ COPY thermalcamera.proto .
 
 # Copy the server code
 COPY server/main.go .
+COPY server/cinterface.go .
 
 # Download all dependencies.
 RUN go get github.com/gorilla/websocket
@@ -47,22 +48,17 @@ WORKDIR /c_code
 COPY server/main.c .
 
 # Compile C code
-RUN gcc -o c_server main.c
+RUN gcc -o c_server main.c -lpthread
 
 RUN chmod +x c_server
 
 # Final stage
-FROM debian:latest
+FROM ubuntu:latest
 
 # Copy the standalone executable from the builder images
 COPY --from=go-builder /ctl-api-example/server /app/server
 COPY --from=c-builder /c_code/c_server /app/c_server
 COPY server/start.sh /app/start.sh
-
-# Install necessary utilities
-RUN apt-get update && apt-get install -y \
-    procps \
- && rm -rf /var/lib/apt/lists/*
 
 RUN chmod +x /app/start.sh
 
