@@ -1,9 +1,12 @@
+# Table of Contents
 - [Thermal Camera API Example](#thermal-camera-api-example)
   - [Introduction](#introduction)
   - [Repository Structure](#repository-structure)
   - [Protobuf Definitions (`thermalcamera.proto`)](#protobuf-definitions-thermalcameraproto)
   - [Usage](#usage)
     - [Building and Running the Application](#building-and-running-the-application)
+      - [Using Docker Compose (Default)](#using-docker-compose-default)
+      - [Using Host for C Server (Alternative)](#using-host-for-c-server-alternative)
     - [Interaction with the Thermal Camera](#interaction-with-the-thermal-camera)
     - [Synchronized Views](#synchronized-views)
   - [Additional Information](#additional-information)
@@ -21,7 +24,7 @@ This repository contains a client-server application demonstrating the use of Pr
 - `/client`: Contains the frontend JavaScript code (`client.js`) and HTML (`ctl.html` and `index.html`).
 - `thermalcamera.proto`: The Protobuf schema defining messages.
 - `Dockerfile.client`, `Dockerfile.go-server`, `Dockerfile.c-server`: Dockerfiles used to build the client, Go server, and C server containers respectively.
-- `docker-compose.yml`: Docker Compose file to orchestrate the client and server containers.
+- `docker-compose.yml` and `docker-compose-host.yml`: Docker Compose files to orchestrate the client and server containers.
 
 ## Protobuf Definitions (`thermalcamera.proto`)
 
@@ -39,17 +42,53 @@ These definitions are used to serialize the data sent between the client and ser
 
 ### Building and Running the Application
 
+#### Using Docker Compose (Default)
+
 1. Build the Docker images using Docker Compose:
 
-```bash
-docker-compose build
-```
+   ```bash
+   docker-compose build
+   ```
 
 2. Run the application:
 
-```bash
-docker-compose up
-```
+   ```bash
+   docker-compose up
+   ```
+
+#### Using Host for C Server (Alternative)
+
+1. Build the C server on the host:
+
+   ```bash
+   gcc -o c_server server/main.c -lpthread
+   chmod +x c_server
+   ```
+
+2. Create named pipes on the host:
+
+   ```bash
+   mkfifo /tmp/toC
+   mkfifo /tmp/fromC
+   ```
+
+3. Run the C server on the host:
+
+   ```bash
+   ./c_server
+   ```
+
+4. Build the Docker images using Docker Compose with the alternative file:
+
+   ```bash
+   docker-compose -f docker-compose-host.yml build
+   ```
+
+5. Run the application:
+
+   ```bash
+   docker-compose -f docker-compose-host.yml up
+   ```
 
 The Go server will be accessible on port `8085`, and the client can be accessed by opening your web browser and navigating to `localhost:8086`.
 
@@ -71,4 +110,10 @@ To stop the application, use the following command:
 
 ```bash
 docker-compose down
+```
+
+Or, if using the host configuration:
+
+```bash
+docker-compose -f docker-compose-host.yml down
 ```
