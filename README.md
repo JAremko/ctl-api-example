@@ -109,11 +109,11 @@ The server code in Go communicates with the C server using named pipes, defined 
 To stop the application, use the following command:
 
 ```bash
-docker-compose down
+docker-compose down -v
 ```
 
 Or, if using the host configuration:
 
 ```bash
-docker-compose -f docker-compose-host.yml down
+docker-compose -f docker-compose-host.yml down -v
 ```
