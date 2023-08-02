@@ -1,15 +1,26 @@
+- [Thermal Camera API Example](#thermal-camera-api-example)
+  - [Introduction](#introduction)
+  - [Repository Structure](#repository-structure)
+  - [Protobuf Definitions (`thermalcamera.proto`)](#protobuf-definitions-thermalcameraproto)
+  - [Usage](#usage)
+    - [Building and Running the Application](#building-and-running-the-application)
+    - [Interaction with the Thermal Camera](#interaction-with-the-thermal-camera)
+    - [Synchronized Views](#synchronized-views)
+  - [Additional Information](#additional-information)
+  - [Stopping the Application](#stopping-the-application)
+
 # Thermal Camera API Example
 
 ## Introduction
 
-This repository contains a client-server application demonstrating the use of Protobufs and WebSockets to control a thermal camera. The server part consists of two components: a Go server and a C server, communicating via named pipes. The client is a JavaScript-based frontend that includes synchronization between clients.
+This repository contains a client-server application demonstrating the use of Protobufs and WebSockets to control a thermal camera. The server part consists of two separate components: a Go server and a C server, communicating via named pipes. The client is a JavaScript-based frontend that includes synchronization between clients.
 
 ## Repository Structure
 
 - `/server`: Contains the Go server code (`main.go` and `cinterface.go`) and C code (`main.c`).
 - `/client`: Contains the frontend JavaScript code (`client.js`) and HTML (`ctl.html` and `index.html`).
 - `thermalcamera.proto`: The Protobuf schema defining messages.
-- `Dockerfile.client` & `Dockerfile.server`: Dockerfiles used to build the client and server containers.
+- `Dockerfile.client`, `Dockerfile.go-server`, `Dockerfile.c-server`: Dockerfiles used to build the client, Go server, and C server containers respectively.
 - `docker-compose.yml`: Docker Compose file to orchestrate the client and server containers.
 
 ## Protobuf Definitions (`thermalcamera.proto`)
@@ -40,11 +51,11 @@ docker-compose build
 docker-compose up
 ```
 
-The server will be accessible on port `8085`, and the client can be accessed by opening your web browser and navigating to `localhost:8086`.
+The Go server will be accessible on port `8085`, and the client can be accessed by opening your web browser and navigating to `localhost:8086`.
 
 ### Interaction with the Thermal Camera
 
-The server code will upgrade the HTTP connection to a WebSocket connection and listen for incoming commands defined in the `thermalcamera.proto` file. It will also handle commands to adjust the thermal camera's settings, such as zoom level and color scheme.
+The Go server code will upgrade the HTTP connection to a WebSocket connection and listen for incoming commands defined in the `thermalcamera.proto` file. It will also handle commands to adjust the thermal camera's settings, such as zoom level and color scheme.
 
 ### Synchronized Views
 
@@ -52,7 +63,7 @@ The server code will upgrade the HTTP connection to a WebSocket connection and l
 
 ## Additional Information
 
-The server code in Go communicates with the C server using named pipes, defined in `cinterface.go`. This allows for inter-process communication and control over a simulated thermal camera.
+The server code in Go communicates with the C server using named pipes, defined in `cinterface.go`. This allows for inter-process communication and control over a simulated thermal camera. The named pipes `/tmp/toC` and `/tmp/fromC` are shared between the Go and C server containers through a shared volume.
 
 ## Stopping the Application
 

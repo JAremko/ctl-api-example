@@ -39,35 +39,15 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o server
 # Make the server executable
 RUN chmod +x server
 
-# Builder stage for C
-FROM gcc:latest as c-builder
-
-# Set the working directory for C code
-WORKDIR /c_code
-
-# Copy C code into the Docker image
-COPY server/main.c .
-
-# Compile C code with pthread support
-RUN gcc -o c_server main.c -lpthread
-
-# Make the C server executable
-RUN chmod +x c_server
-
 # Final stage
 FROM ubuntu:latest
 
-# Copy the standalone executables from the builder images
+# Copy the standalone executable from the builder image
 COPY --from=go-builder /ctl-api-example/server /app/server
-COPY --from=c-builder /c_code/c_server /app/c_server
-COPY server/start.sh /app/start.sh
-
-# Make the start script executable
-RUN chmod +x /app/start.sh
 
 # Expose the port the app runs on
 EXPOSE 8085
 
 # Set the working directory and command for running the application
 WORKDIR /app
-CMD ["/bin/bash", "/app/start.sh"]
+CMD ["/app/server"]
