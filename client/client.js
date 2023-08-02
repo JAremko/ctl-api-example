@@ -43,12 +43,10 @@ socket.onmessage = event => {
     const buffer = new Uint8Array(event.data);
     const payloadMessage = Payload.decode(buffer);
 
-    // Iterate over handlers and execute the matched handler
-    Object.entries(handlers).forEach(([key, handler]) => {
-        if (payloadMessage[key]) {
-            handler(payloadMessage);
-        }
-    });
+    // Call handlers based on fields present in the payload
+    if (payloadMessage.setZoomLevel) handlers.setZoomLevel(payloadMessage);
+    if (payloadMessage.setColorScheme) handlers.setColorScheme(payloadMessage);
+    if (payloadMessage.accChargeLevel) handlers.accChargeLevel(payloadMessage);
 };
 
 zoomLevelSelect.addEventListener('change', () => {

@@ -66,7 +66,7 @@ func SendPacketToC(packetID uint32, value int32) error {
 	if err != nil {
 		pipeToC.Close()
 		pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe) // Reopen the pipe if an error occurs.
-		if err != nil { // Handle the error if reopening also fails
+		if err != nil {                                                           // Handle the error if reopening also fails
 			return err
 		}
 	}

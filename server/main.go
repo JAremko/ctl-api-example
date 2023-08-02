@@ -5,9 +5,9 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/JAremko/ctl-api-example/thermalcamera"
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/websocket"
-	"github.com/JAremko/ctl-api-example/thermalcamera"
 )
 
 type WriteRequest struct {
@@ -79,39 +79,27 @@ func handlePacketsFromC(cm *ConnectionManager) error {
 			log.Println("Error receiving packet:", err)
 			return err
 		}
-		var payload *thermalcamera.Payload
+		var payload thermalcamera.Payload
 		switch packet.ID {
 		case SET_ZOOM_LEVEL:
 			zoomLevel := int32(binary.LittleEndian.Uint32(packet.Payload[:4]))
-			payload = &thermalcamera.Payload{
-				PayloadType: &thermalcamera.Payload_SetZoomLevel{
-					SetZoomLevel: &thermalcamera.SetZoomLevel{
-						Level: zoomLevel,
-					},
-				},
+			payload.SetZoomLevel = &thermalcamera.SetZoomLevel{
+				Level: zoomLevel,
 			}
 		case SET_COLOR_SCHEME:
 			colorScheme := thermalcamera.ColorScheme(binary.LittleEndian.Uint32(packet.Payload[:4]))
-			payload = &thermalcamera.Payload{
-				PayloadType: &thermalcamera.Payload_SetColorScheme{
-					SetColorScheme: &thermalcamera.SetColorScheme{
-						Scheme: colorScheme,
-					},
-				},
+			payload.SetColorScheme = &thermalcamera.SetColorScheme{
+				Scheme: colorScheme,
 			}
 		case CHARGE_PACKET:
 			charge := int32(binary.LittleEndian.Uint32(packet.Payload[:]))
-			payload = &thermalcamera.Payload{
-				PayloadType: &thermalcamera.Payload_AccChargeLevel{
-					AccChargeLevel: &thermalcamera.AccChargeLevel{
-						Charge: charge,
-					},
-				},
+			payload.AccChargeLevel = &thermalcamera.AccChargeLevel{
+				Charge: charge,
 			}
 		default:
 			log.Println("Unknown packet ID:", packet.ID)
 		}
-		message, err := proto.Marshal(payload)
+		message, err := proto.Marshal(&payload)
 		if err != nil {
 			log.Println("Error marshaling payload:", err)
 			return err
@@ -155,12 +143,12 @@ func handleConnection(conn *websocket.Conn, cm *ConnectionManager) {
 					continue
 				}
 
-				// Switch on the specific payload type and handle it
-				switch x := payload.PayloadType.(type) {
-				case *thermalcamera.Payload_SetZoomLevel:
-					handleSetZoomLevel(int32(x.SetZoomLevel.Level))
-				case *thermalcamera.Payload_SetColorScheme:
-					handleSetColorScheme(x.SetColorScheme.Scheme)
+				// Handling based on fields present in the payload
+				if payload.SetZoomLevel != nil {
+					handleSetZoomLevel(int32(payload.SetZoomLevel.Level))
+				}
+				if payload.SetColorScheme != nil {
+					handleSetColorScheme(payload.SetColorScheme.Scheme)
 				}
 			}
 		}

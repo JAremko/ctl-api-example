@@ -5,11 +5,9 @@ package thermalcamera;
 option go_package = "github.com/JAremko/ctl-api-example/thermalcamera";
 
 message Payload {
-    oneof payload_type {
-        SetZoomLevel set_zoom_level = 1;
-        SetColorScheme set_color_scheme = 2;
-        AccChargeLevel acc_charge_level = 3;
-    }
+    SetZoomLevel set_zoom_level = 1;
+    SetColorScheme set_color_scheme = 2;
+    AccChargeLevel acc_charge_level = 3;
 }
 
 message SetZoomLevel {
