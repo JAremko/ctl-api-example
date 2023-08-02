@@ -12,7 +12,7 @@
 #define PIPE_NAME_FROM_C "/tmp/fromC"
 #define SET_ZOOM_LEVEL 1
 #define SET_COLOR_SCHEME 2
-#define STREAM_CHARGE_RESPONSE 3
+#define CHARGE_PACKET 3
 #define PayloadSize 64
 
 // Packet structure for communication between processes
@@ -79,7 +79,7 @@ void *updateCharge(void *args) {
 
   while (1) {
     Packet packet;
-    packet.id = STREAM_CHARGE_RESPONSE;
+    packet.id = CHARGE_PACKET;
 
     int32_t charge = rand() % 101;
     memcpy(packet.payload, &charge, sizeof(charge));

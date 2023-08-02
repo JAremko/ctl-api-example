@@ -10,58 +10,57 @@ const ColorScheme = {
     "WHITE_HOT": 3
 };
 
-let Command;
+let Payload;
 let SetZoomLevel;
 let SetColorScheme;
-let StreamChargeResponse;
+let AccChargeLevel;
 
 protobuf.load("thermalcamera.proto").then(root => {
-    Command = root.lookup("thermalcamera.Command");
+    Payload = root.lookup("thermalcamera.Payload");
     SetZoomLevel = root.lookup("thermalcamera.SetZoomLevel");
     SetColorScheme = root.lookup("thermalcamera.SetColorScheme");
-    StreamChargeResponse = root.lookup("thermalcamera.StreamChargeResponse");
+    AccChargeLevel = root.lookup("thermalcamera.AccChargeLevel");
 }).catch(error => console.error("Failed to load protobuf definitions:", error));
+
+const handlers = {
+    setZoomLevel: payload => {
+        zoomLevelSelect.value = payload.setZoomLevel.level;
+    },
+    setColorScheme: payload => {
+        colorSchemeSelect.value = Object.keys(ColorScheme).find(key => ColorScheme[key] === payload.setColorScheme.scheme);
+    },
+    accChargeLevel: payload => {
+        const charge = payload.accChargeLevel.charge;
+        chargeProgressBar.style.width = `${charge}%`;
+        chargePercentage.textContent = `${charge}%`;
+    }
+};
 
 const socket = new WebSocket("ws://localhost:8085");
 socket.binaryType = "arraybuffer";
 
 socket.onmessage = event => {
     const buffer = new Uint8Array(event.data);
+    const payloadMessage = Payload.decode(buffer);
 
-    // Attempt to decode as a Command message
-    try {
-        const commandMessage = Command.decode(buffer);
-
-        if (commandMessage.setZoomLevel) {
-            zoomLevelSelect.value = commandMessage.setZoomLevel.level;
+    // Iterate over handlers and execute the matched handler
+    Object.entries(handlers).forEach(([key, handler]) => {
+        if (payloadMessage[key]) {
+            handler(payloadMessage);
         }
-
-        if (commandMessage.setColorScheme) {
-            colorSchemeSelect.value = Object.keys(ColorScheme).find(key => ColorScheme[key] === commandMessage.setColorScheme.scheme);
-        }
-    } catch (error) {
-        // If it fails, attempt to decode as a StreamChargeResponse message
-        try {
-            const response = StreamChargeResponse.decode(buffer);
-            const charge = response.charge;
-            chargeProgressBar.style.width = `${charge}%`;
-            chargePercentage.textContent = `${charge}%`;
-        } catch (error) {
-            console.error("Failed to decode the message from the server:", error);
-        }
-    }
+    });
 };
 
-zoomLevelSelect.onchange = () => {
+zoomLevelSelect.addEventListener('change', () => {
     const setZoomLevelMessage = SetZoomLevel.create({ level: parseInt(zoomLevelSelect.value) });
-    const commandZoomLevel = Command.create({ setZoomLevel: setZoomLevelMessage });
-    const buffer = Command.encode(commandZoomLevel).finish();
+    const payload = Payload.create({ setZoomLevel: setZoomLevelMessage });
+    const buffer = Payload.encode(payload).finish();
     socket.send(buffer);
-};
+});
 
-colorSchemeSelect.onchange = () => {
+colorSchemeSelect.addEventListener('change', () => {
     const setColorSchemeMessage = SetColorScheme.create({ scheme: ColorScheme[colorSchemeSelect.value] });
-    const commandColorScheme = Command.create({ setColorScheme: setColorSchemeMessage });
-    const buffer = Command.encode(commandColorScheme).finish();
+    const payload = Payload.create({ setColorScheme: setColorSchemeMessage });
+    const buffer = Payload.encode(payload).finish();
     socket.send(buffer);
-};
+});

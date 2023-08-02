@@ -4,10 +4,11 @@ package thermalcamera;
 
 option go_package = "github.com/JAremko/ctl-api-example/thermalcamera";
 
-message Command {
-    oneof command_type {
+message Payload {
+    oneof payload_type {
         SetZoomLevel set_zoom_level = 1;
         SetColorScheme set_color_scheme = 2;
+        AccChargeLevel acc_charge_level = 3;
     }
 }
 
@@ -19,7 +20,7 @@ message SetColorScheme {
     ColorScheme scheme = 1;
 }
 
-message StreamChargeResponse {
+message AccChargeLevel {
     int32 charge = 1; // Represented as percentage
 }
 

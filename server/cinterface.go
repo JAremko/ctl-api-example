@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"log"
 	"os"
-	"unsafe"
 )
 
 // Constants for communication between Go and C.
@@ -42,7 +41,7 @@ func initPipes() {
 // ReceivePacketFromC reads a packet from the C program through the named pipe.
 func ReceivePacketFromC() (*Packet, error) {
 	var packet Packet
-	var buf [PayloadSize + 4]byte
+	var buf [4 + PayloadSize]byte // Include size of uint32 ID
 	if _, err := pipeFromC.Read(buf[:]); err != nil {
 		pipeFromC.Close()
 		pipeFromC, _ = os.Open(PIPE_NAME_FROM_C) // Reopen the pipe if an error occurs.
@@ -59,7 +58,11 @@ func SendPacketToC(packetID uint32, value int32) error {
 	packet.ID = packetID
 	binary.LittleEndian.PutUint32(packet.Payload[:4], uint32(value))
 
-	_, err := pipeToC.Write((*[PayloadSize + 4]byte)(unsafe.Pointer(&packet))[:])
+	var buf [4 + PayloadSize]byte
+	binary.LittleEndian.PutUint32(buf[:4], packet.ID)
+	copy(buf[4:], packet.Payload[:])
+
+	_, err := pipeToC.Write(buf[:])
 	if err != nil {
 		pipeToC.Close()
 		pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe) // Reopen the pipe if an error occurs.
