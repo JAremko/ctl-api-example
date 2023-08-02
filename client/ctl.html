@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Thermal Camera Controller</title>
+    <link rel="stylesheet" href="bulma.css">
+    <style>
+        #charge-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .progress {
+            width: 100%;
+            background-color: #f3f3f3;
+            position: relative;
+            height: 20px;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: limegreen;
+            position: absolute;
+            transition: width 0.3s ease;
+        }
+
+        #charge-percentage {
+            position: absolute;
+            width: 100%;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            text-align: center;
+            color: white;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+        }
+
+        .field-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <section class="section">
+        <div class="container">
+            <h1 class="title">Thermal Camera Controller</h1>
+            <div class="field-container">
+                <div class="field">
+                    <label class="label">Zoom Level</label>
+                    <div class="control">
+                        <div class="select">
+                            <select id="zoom-level">
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="label">Color Scheme</label>
+                    <div class="control">
+                        <div class="select">
+                            <select id="color-scheme">
+                                <option value="UNKNOWN" disabled>Unknown</option>
+                                <option value="SEPIA">Sepia</option>
+                                <option value="BLACK_HOT">Black Hot</option>
+                                <option value="WHITE_HOT">White Hot</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="label">Battery Charge</label>
+                    <div class="control" id="charge-container">
+                        <div class="progress" id="charge-progress">
+                            <div class="progress-bar" id="charge-bar"></div>
+                            <p id="charge-percentage"></p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <script src="protobuf.js"></script>
+    <script src="client.js"></script>
+</body>
+
+</html>
