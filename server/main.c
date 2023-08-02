@@ -21,25 +21,26 @@ typedef struct {
   char payload[PayloadSize];
 } Packet;
 
+pthread_mutex_t pipe_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 // Function to handle incoming commands from another process
 void *handleCommands(void *args) {
-  // Open named pipe for reading
   int pipeToC = open(PIPE_NAME_TO_C, O_RDONLY);
-  if (pipeToC < 0) {
-    perror("[C] Error opening pipe to C");
+  int pipeFromC = open(PIPE_NAME_FROM_C, O_WRONLY);
+
+  if (pipeToC < 0 || pipeFromC < 0) {
+    perror("[C] Error opening pipes");
     return NULL;
   }
 
   while (1) {
     Packet packet;
-    // Read the incoming packet
     ssize_t bytesRead = read(pipeToC, &packet, sizeof(packet));
     if (bytesRead < 0) {
       perror("[C] Error reading from pipe");
       break;
     }
 
-    // Handle the packet based on its ID
     switch (packet.id) {
     case SET_ZOOM_LEVEL:
       printf("[C] SetZoomLevel command received with level: %d\n", *(int32_t *)packet.payload);
@@ -50,16 +51,25 @@ void *handleCommands(void *args) {
       fflush(stdout);
       break;
     }
+
+    pthread_mutex_lock(&pipe_mutex);
+    if (write(pipeFromC, &packet, sizeof(packet)) < 0) {
+      perror("[C] Error writing to pipe");
+      pthread_mutex_unlock(&pipe_mutex);
+      break;
+    }
+    pthread_mutex_unlock(&pipe_mutex);
   }
 
   close(pipeToC);
+  close(pipeFromC);
   return NULL;
 }
 
 // Function to update the charge and send it to Go process
 void *updateCharge(void *args) {
-  // Open named pipe for writing
   int pipeFromC = open(PIPE_NAME_FROM_C, O_WRONLY);
+
   if (pipeFromC < 0) {
     perror("[C] Error opening pipe from C");
     return NULL;
@@ -73,11 +83,14 @@ void *updateCharge(void *args) {
 
     int32_t charge = rand() % 101;
     memcpy(packet.payload, &charge, sizeof(charge));
-    // Write the packet to the pipe
+
+    pthread_mutex_lock(&pipe_mutex);
     if (write(pipeFromC, &packet, sizeof(packet)) < 0) {
       perror("[C] Error writing to pipe");
+      pthread_mutex_unlock(&pipe_mutex);
       break;
     }
+    pthread_mutex_unlock(&pipe_mutex);
 
     sleep(1);
   }
@@ -87,25 +100,19 @@ void *updateCharge(void *args) {
 }
 
 int main() {
-  // Remove existing named pipes if they exist
   unlink(PIPE_NAME_TO_C);
   unlink(PIPE_NAME_FROM_C);
 
-  // Create named pipes
   mkfifo(PIPE_NAME_TO_C, 0600);
   mkfifo(PIPE_NAME_FROM_C, 0600);
 
   pthread_t commandThread, chargeThread;
-
-  // Create threads to handle commands and update charge
   pthread_create(&commandThread, NULL, handleCommands, NULL);
   pthread_create(&chargeThread, NULL, updateCharge, NULL);
 
-  // Wait for the threads to complete
   pthread_join(commandThread, NULL);
   pthread_join(chargeThread, NULL);
 
-  // Remove the named pipes
   unlink(PIPE_NAME_TO_C);
   unlink(PIPE_NAME_FROM_C);
 

@@ -71,12 +71,54 @@ func handlePacketsFromC(cm *ConnectionManager) error {
 		}
 
 		switch packet.ID {
+		case SET_ZOOM_LEVEL:
+			handleZoomLevelPacket(cm, packet)
+		case SET_COLOR_SCHEME:
+			handleColorSchemePacket(cm, packet)
 		case CHARGE_PACKET:
 			handleChargePacket(cm, packet)
 		default:
 			log.Println("Unknown packet ID:", packet.ID)
 		}
 	}
+}
+
+func handleZoomLevelPacket(cm *ConnectionManager, packet *Packet) {
+	zoomLevel := int32(binary.LittleEndian.Uint32(packet.Payload[:4]))
+	command := &thermalcamera.Command{
+		CommandType: &thermalcamera.Command_SetZoomLevel{
+			SetZoomLevel: &thermalcamera.SetZoomLevel{
+				Level: zoomLevel,
+			},
+		},
+	}
+	message, err := proto.Marshal(command)
+	if err != nil {
+		log.Println("Error marshaling payload:", err)
+		return
+	}
+
+	cm.Broadcast(WriteRequest{websocket.BinaryMessage, message})
+	log.Println("Zoom level set to:", zoomLevel)
+}
+
+func handleColorSchemePacket(cm *ConnectionManager, packet *Packet) {
+	colorScheme := thermalcamera.ColorScheme(binary.LittleEndian.Uint32(packet.Payload[:4]))
+	command := &thermalcamera.Command{
+		CommandType: &thermalcamera.Command_SetColorScheme{
+			SetColorScheme: &thermalcamera.SetColorScheme{
+				Scheme: colorScheme,
+			},
+		},
+	}
+	message, err := proto.Marshal(command)
+	if err != nil {
+		log.Println("Error marshaling payload:", err)
+		return
+	}
+
+	cm.Broadcast(WriteRequest{websocket.BinaryMessage, message})
+	log.Println("Color scheme set to:", thermalcamera.ColorScheme_name[int32(colorScheme)])
 }
 
 func handleChargePacket(cm *ConnectionManager, packet *Packet) {

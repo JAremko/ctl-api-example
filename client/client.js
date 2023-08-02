@@ -1,6 +1,6 @@
 const zoomLevelSelect = document.getElementById('zoom-level');
 const colorSchemeSelect = document.getElementById('color-scheme');
-const chargeProgressBar = document.getElementById('charge-progress');
+const chargeProgressBar = document.getElementById('charge-bar');
 const chargePercentage = document.getElementById('charge-percentage');
 
 const ColorScheme = {
@@ -26,11 +26,30 @@ const socket = new WebSocket("ws://localhost:8085");
 socket.binaryType = "arraybuffer";
 
 socket.onmessage = event => {
-    const response = StreamChargeResponse.decode(new Uint8Array(event.data));
-    const charge = response.charge;
-    const chargeBar = document.getElementById('charge-bar');
-    chargeBar.style.width = `${charge}%`;
-    chargePercentage.textContent = `${charge}%`;
+    const buffer = new Uint8Array(event.data);
+
+    // Attempt to decode as a Command message
+    try {
+        const commandMessage = Command.decode(buffer);
+
+        if (commandMessage.setZoomLevel) {
+            zoomLevelSelect.value = commandMessage.setZoomLevel.level;
+        }
+
+        if (commandMessage.setColorScheme) {
+            colorSchemeSelect.value = Object.keys(ColorScheme).find(key => ColorScheme[key] === commandMessage.setColorScheme.scheme);
+        }
+    } catch (error) {
+        // If it fails, attempt to decode as a StreamChargeResponse message
+        try {
+            const response = StreamChargeResponse.decode(buffer);
+            const charge = response.charge;
+            chargeProgressBar.style.width = `${charge}%`;
+            chargePercentage.textContent = `${charge}%`;
+        } catch (error) {
+            console.error("Failed to decode the message from the server:", error);
+        }
+    }
 };
 
 zoomLevelSelect.onchange = () => {
