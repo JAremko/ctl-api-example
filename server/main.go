@@ -118,11 +118,6 @@ func handleConnection(conn *websocket.Conn, cm *ConnectionManager) {
 
 	errorChannel := make(chan error, 1)
 	go cw.WriteHandler()
-	go func() {
-		if err := handlePacketsFromC(cm); err != nil {
-			errorChannel <- err
-		}
-	}()
 
 	for {
 		select {
@@ -188,15 +183,22 @@ var upgrader = websocket.Upgrader{
 }
 
 func main() {
-	initPipes()
-	defer closePipes()
+    initPipes()
+    defer closePipes()
 
-	connectionManager := &ConnectionManager{
-		connections: make(map[*ConnectionWrapper]bool),
-	}
+    connectionManager := &ConnectionManager{
+        connections: make(map[*ConnectionWrapper]bool),
+    }
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		echo(w, r, connectionManager)
-	})
-	log.Fatal(http.ListenAndServe(":8085", nil))
+    go func() {
+        if err := handlePacketsFromC(connectionManager); err != nil {
+            log.Println("Error in stream handling:", err)
+        }
+    }()
+
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        echo(w, r, connectionManager)
+    })
+    log.Fatal(http.ListenAndServe(":8085", nil))
 }
+
