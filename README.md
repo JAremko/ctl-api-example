@@ -1,4 +1,3 @@
-```markdown
 # Thermal Camera API Example
 
 ## Introduction
