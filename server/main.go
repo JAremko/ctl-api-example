@@ -25,6 +25,26 @@ type ConnectionManager struct {
 	connections map[*ConnectionWrapper]bool
 }
 
+type DefaultState struct {
+	ZoomLevel    int32
+	ColorScheme  thermalcamera.ColorScheme
+	BatteryLevel int32
+}
+
+func sendDefaultState(cw *ConnectionWrapper, defaultState *DefaultState) {
+	payload := &thermalcamera.Payload{
+		SetZoomLevel:   &thermalcamera.SetZoomLevel{Level: defaultState.ZoomLevel},
+		SetColorScheme: &thermalcamera.SetColorScheme{Scheme: defaultState.ColorScheme},
+		AccChargeLevel: &thermalcamera.AccChargeLevel{Charge: defaultState.BatteryLevel},
+	}
+	message, err := proto.Marshal(payload)
+	if err != nil {
+		log.Println("Error marshaling default state:", err)
+		return
+	}
+	cw.writeChannel <- WriteRequest{websocket.BinaryMessage, message}
+}
+
 func (cm *ConnectionManager) Broadcast(writeReq WriteRequest) {
 	for connection := range cm.connections {
 		select {
@@ -108,7 +128,7 @@ func handlePacketsFromC(cm *ConnectionManager) error {
 	}
 }
 
-func handleConnection(conn *websocket.Conn, cm *ConnectionManager) {
+func handleConnection(conn *websocket.Conn, cm *ConnectionManager, defaultState *DefaultState) {
 	cw := &ConnectionWrapper{conn: conn, writeChannel: make(chan WriteRequest), stopChannel: make(chan struct{})}
 	cm.AddConnection(cw)
 	defer func() {
@@ -122,6 +142,8 @@ func handleConnection(conn *websocket.Conn, cm *ConnectionManager) {
 
 	errorChannel := make(chan error, 1)
 	go cw.WriteHandler()
+
+	sendDefaultState(cw, defaultState)
 
 	for {
 		select {
@@ -155,7 +177,7 @@ func handleConnection(conn *websocket.Conn, cm *ConnectionManager) {
 	}
 }
 
-func echo(w http.ResponseWriter, r *http.Request, cm *ConnectionManager) {
+func echo(w http.ResponseWriter, r *http.Request, cm *ConnectionManager, defaultState *DefaultState) {
 	log.Println("Incoming connection from:", r.RemoteAddr)
 
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -164,7 +186,7 @@ func echo(w http.ResponseWriter, r *http.Request, cm *ConnectionManager) {
 		return
 	}
 
-	go handleConnection(conn, cm)
+	go handleConnection(conn, cm, defaultState)
 }
 
 var upgrader = websocket.Upgrader{
@@ -177,6 +199,12 @@ func main() {
 	initPipes()
 	defer closePipes()
 
+	defaultState := &DefaultState{
+		ZoomLevel:    1,
+		ColorScheme:  thermalcamera.ColorScheme_BLACK_HOT,
+		BatteryLevel: 100,
+	}
+
 	connectionManager := &ConnectionManager{
 		connections: make(map[*ConnectionWrapper]bool),
 	}
@@ -188,7 +216,7 @@ func main() {
 	}()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		echo(w, r, connectionManager)
+		echo(w, r, connectionManager, defaultState)
 	})
 	log.Fatal(http.ListenAndServe(":8085", nil))
 }
