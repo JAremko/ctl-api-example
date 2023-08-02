@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/JAremko/ctl-api-example/thermalcamera"
 	"github.com/golang/protobuf/proto"
@@ -26,23 +27,60 @@ type ConnectionManager struct {
 }
 
 type DefaultState struct {
-	ZoomLevel    int32
-	ColorScheme  thermalcamera.ColorScheme
-	BatteryLevel int32
+    sync.Mutex
+    ZoomLevel    int32
+    ColorScheme  thermalcamera.ColorScheme
+    BatteryLevel int32
+}
+
+func (ds *DefaultState) GetZoomLevel() int32 {
+    ds.Lock()
+    defer ds.Unlock()
+    return ds.ZoomLevel
+}
+
+func (ds *DefaultState) GetColorScheme() thermalcamera.ColorScheme {
+    ds.Lock()
+    defer ds.Unlock()
+    return ds.ColorScheme
+}
+
+func (ds *DefaultState) GetBatteryLevel() int32 {
+    ds.Lock()
+    defer ds.Unlock()
+    return ds.BatteryLevel
+}
+
+func (ds *DefaultState) UpdateZoomLevel(level int32) {
+    ds.Lock()
+    defer ds.Unlock()
+    ds.ZoomLevel = level
+}
+
+func (ds *DefaultState) UpdateColorScheme(scheme thermalcamera.ColorScheme) {
+    ds.Lock()
+    defer ds.Unlock()
+    ds.ColorScheme = scheme
+}
+
+func (ds *DefaultState) UpdateBatteryLevel(level int32) {
+    ds.Lock()
+    defer ds.Unlock()
+    ds.BatteryLevel = level
 }
 
 func sendDefaultState(cw *ConnectionWrapper, defaultState *DefaultState) {
-	payload := &thermalcamera.Payload{
-		SetZoomLevel:   &thermalcamera.SetZoomLevel{Level: defaultState.ZoomLevel},
-		SetColorScheme: &thermalcamera.SetColorScheme{Scheme: defaultState.ColorScheme},
-		AccChargeLevel: &thermalcamera.AccChargeLevel{Charge: defaultState.BatteryLevel},
-	}
-	message, err := proto.Marshal(payload)
-	if err != nil {
-		log.Println("Error marshaling default state:", err)
-		return
-	}
-	cw.writeChannel <- WriteRequest{websocket.BinaryMessage, message}
+    payload := &thermalcamera.Payload{
+        SetZoomLevel:   &thermalcamera.SetZoomLevel{Level: defaultState.GetZoomLevel()},
+        SetColorScheme: &thermalcamera.SetColorScheme{Scheme: defaultState.GetColorScheme()},
+        AccChargeLevel: &thermalcamera.AccChargeLevel{Charge: defaultState.GetBatteryLevel()},
+    }
+    message, err := proto.Marshal(payload)
+    if err != nil {
+        log.Println("Error marshaling default state:", err)
+        return
+    }
+    cw.writeChannel <- WriteRequest{websocket.BinaryMessage, message}
 }
 
 func (cm *ConnectionManager) Broadcast(writeReq WriteRequest) {
