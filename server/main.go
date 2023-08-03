@@ -207,6 +207,12 @@ func handleConnection(conn *websocket.Conn, cm *ConnectionManager, defaultState 
 	errorChannel := make(chan error, 1)
 	go cw.WriteHandler(errorChannel)
 
+	conn.SetCloseHandler(func(code int, text string) error {
+		log.Printf("Close handler called with code %d and text %s\n", code, text)
+		cw.stopChannel <- struct{}{} // Signal the write loop to exit
+		return nil
+	})
+
 	sendDefaultState(cw, defaultState)
 
 	for {
@@ -218,7 +224,11 @@ func handleConnection(conn *websocket.Conn, cm *ConnectionManager, defaultState 
 		default:
 			messageType, message, err := conn.ReadMessage()
 			if err != nil {
-				log.Println(err)
+				if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+					log.Println("Received close message, closing connection.")
+				} else {
+					log.Println("Read error:", err)
+				}
 				return
 			}
 			if messageType == websocket.BinaryMessage {
