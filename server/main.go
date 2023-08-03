@@ -27,6 +27,7 @@ type ConnectionWrapper struct {
 // ConnectionManager keeps track of active WebSocket connections
 type ConnectionManager struct {
 	connections map[*ConnectionWrapper]bool
+	mutex       sync.Mutex
 }
 
 // DefaultState defines the default state of the thermal camera
@@ -98,12 +99,13 @@ func sendDefaultState(cw *ConnectionWrapper, defaultState *DefaultState) {
 
 // Broadcast sends a message to all active connections
 func (cm *ConnectionManager) Broadcast(writeReq WriteRequest) {
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
 	for connection := range cm.connections {
 		select {
 		case connection.writeChannel <- writeReq:
 		default:
 			close(connection.stopChannel)
-			close(connection.writeChannel)
 			delete(cm.connections, connection)
 		}
 	}
@@ -111,11 +113,15 @@ func (cm *ConnectionManager) Broadcast(writeReq WriteRequest) {
 
 // AddConnection adds a connection to the manager
 func (cm *ConnectionManager) AddConnection(connection *ConnectionWrapper) {
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
 	cm.connections[connection] = true
 }
 
 // RemoveConnection removes a connection from the manager
 func (cm *ConnectionManager) RemoveConnection(connection *ConnectionWrapper) {
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
 	delete(cm.connections, connection)
 }
 
@@ -198,10 +204,11 @@ func handleConnection(conn *websocket.Conn, cm *ConnectionManager, defaultState 
 	defer func() {
 		conn.WriteMessage(websocket.CloseMessage, []byte{})
 		conn.Close()
-		close(cw.stopChannel)
+		close(cw.stopChannel) // Close the stopChannel to signal the write loop to exit
 		close(cw.writeChannel)
 		cm.RemoveConnection(cw)
 	}()
+
 	log.Println("Upgraded to WebSocket connection")
 
 	errorChannel := make(chan error, 1)
