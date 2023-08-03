@@ -150,7 +150,7 @@ func handleSetColorScheme(scheme thermalcamera.ColorScheme) {
 }
 
 // handlePacketsFromC handles packets received from C and broadcasts them
-func handlePacketsFromC(cm *ConnectionManager) error {
+func handlePacketsFromC(cm *ConnectionManager, defaultState *DefaultState) error {
 	for {
 		// Handling various packets received from C
 		packet, err := ReceivePacketFromC()
@@ -165,16 +165,19 @@ func handlePacketsFromC(cm *ConnectionManager) error {
 			payload.SetZoomLevel = &thermalcamera.SetZoomLevel{
 				Level: zoomLevel,
 			}
+			defaultState.UpdateZoomLevel(zoomLevel) // Update zoom level
 		case SET_COLOR_SCHEME:
 			colorScheme := thermalcamera.ColorScheme(binary.LittleEndian.Uint32(packet.Payload[:4]))
 			payload.SetColorScheme = &thermalcamera.SetColorScheme{
 				Scheme: colorScheme,
 			}
+			defaultState.UpdateColorScheme(colorScheme) // Update color scheme
 		case CHARGE_PACKET:
 			charge := int32(binary.LittleEndian.Uint32(packet.Payload[:]))
 			payload.AccChargeLevel = &thermalcamera.AccChargeLevel{
 				Charge: charge,
 			}
+			defaultState.UpdateBatteryLevel(charge) // Update battery level
 		default:
 			log.Println("Unknown packet ID:", packet.ID)
 		}
@@ -274,7 +277,7 @@ func main() {
 
 	// Starting a goroutine to handle packets from C
 	go func() {
-		if err := handlePacketsFromC(connectionManager); err != nil {
+		if err := handlePacketsFromC(connectionManager, defaultState); err != nil {
 			log.Println("Error in stream handling:", err)
 		}
 	}()
