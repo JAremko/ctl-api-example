@@ -3,8 +3,8 @@ package main
 
 import (
 	"encoding/binary" // Used for binary data encoding
-	"log"             // Used for logging
 	"os"              // Used for file handling
+	"time"            // Import time for sleep
 )
 
 // Constants used for defining various communication properties
@@ -29,13 +29,19 @@ var pipeFromC *os.File // File handle for the named pipe to receive data from th
 // initPipes initializes the named pipes for communication with the C program.
 func initPipes() {
 	var err error
-	pipeFromC, err = os.Open(PIPE_NAME_FROM_C) // Open the named pipe for reading from the C program
-	if err != nil {
-		log.Fatal(err) // Log the error and terminate if opening fails
+	for {
+		pipeFromC, err = os.Open(PIPE_NAME_FROM_C) // Open the named pipe for reading from the C program
+		if err == nil {
+			break
+		}
+		time.Sleep(1 * time.Second) // Sleep for 1 second before retrying
 	}
-	pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe) // Open the named pipe for writing to the C program
-	if err != nil {
-		log.Fatal(err) // Log the error and terminate if opening fails
+	for {
+		pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe) // Open the named pipe for writing to the C program
+		if err == nil {
+			break
+		}
+		time.Sleep(1 * time.Second) // Sleep for 1 second before retrying
 	}
 }
 
