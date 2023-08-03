@@ -20,7 +20,9 @@ RUN go mod init github.com/JAremko/ctl-api-example
 # Copy the proto file and server code into the Docker image
 COPY thermalcamera.proto .
 COPY server/main.go .
+COPY server/state.go .
 COPY server/cinterface.go .
+COPY server/handlers.go .
 
 # Download all dependencies
 RUN go get github.com/gorilla/websocket
