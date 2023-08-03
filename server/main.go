@@ -120,7 +120,7 @@ func (cm *ConnectionManager) RemoveConnection(connection *ConnectionWrapper) {
 }
 
 // WriteHandler deals with writing messages to the WebSocket
-func (cw *ConnectionWrapper) WriteHandler() {
+func (cw *ConnectionWrapper) WriteHandler(errorChannel chan error) {
 	for {
 		select {
 		case <-cw.stopChannel: // Return if stop signal received
@@ -131,6 +131,7 @@ func (cw *ConnectionWrapper) WriteHandler() {
 			}
 			if err := cw.conn.WriteMessage(writeReq.messageType, writeReq.data); err != nil {
 				log.Println(err)
+				errorChannel <- err
 				return
 			}
 		}
@@ -204,7 +205,7 @@ func handleConnection(conn *websocket.Conn, cm *ConnectionManager, defaultState 
 	log.Println("Upgraded to WebSocket connection")
 
 	errorChannel := make(chan error, 1)
-	go cw.WriteHandler()
+	go cw.WriteHandler(errorChannel)
 
 	sendDefaultState(cw, defaultState)
 
