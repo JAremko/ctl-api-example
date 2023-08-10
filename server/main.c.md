@@ -3,7 +3,6 @@
 ## Table of Contents
 
 - [Overview](#overview)
-- [Prerequisites](#prerequisites)
 - [Data Flow](#data-flow)
 - [Functions](#functions)
     - [handleZoomLevel](#handlezoomlevel)
@@ -18,12 +17,6 @@
 ## Overview
 
 This C program acts as an intermediary that communicates with a Go process via named pipes. The program processes commands from the Go program and updates a simulated charge status back to it. The code uses COBS (Consistent Overhead Byte Stuffing) for encoding and decoding the data before sending and after receiving it via pipes.
-
-## Prerequisites
-
-- You should have a C compiler like GCC installed.
-- The `cobs.h` file (which isn't provided here) must be available for the code to work.
-- Named pipes are used for inter-process communication. Ensure your OS supports it (Linux does).
 
 ## Data Flow
 
