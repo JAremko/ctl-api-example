@@ -1,101 +1,77 @@
-# Table of Contents
-- [cinterface.go](#cinterfacego)
-  - [Package and Imports](#package-and-imports)
-  - [Constants and Type Definitions](#constants-and-type-definitions)
-  - [Initialization of Pipes](#initialization-of-pipes)
-  - [Receiving Packets from C](#receiving-packets-from-c)
-  - [Sending Packets to C](#sending-packets-to-c)
-  - [Closing Pipes](#closing-pipes)
-  - [Channel Data Flow](#channel-data-flow)
+# `cinterface.go` Documentation
 
-# cinterface.go
+`cinterface.go` serves as an interface between Go and C programs. It facilitates the communication between the two via named pipes. The communication is established through packets that have a unique ID and payload. This document provides a comprehensive guide on the structure, functionality, and data flow of `cinterface.go`.
 
-The `cinterface.go` file is responsible for managing the communication between the Go server and the C server. It uses named pipes for inter-process communication (IPC) and defines the structure and functions to send and receive packets.
+## Table of Contents
+- [Overview](#overview)
+- [Constants and Types](#constants-and-types)
+  - [Constants](#constants)
+  - [Packet Structure](#packet-structure)
+- [Global Variables](#global-variables)
+- [Functions](#functions)
+  - [initPipes](#initpipes)
+  - [ReceivePacketFromC](#receivepacketfromc)
+  - [SendPacketToC](#sendpackettoc)
+  - [closePipes](#closepipes)
+- [Data Flow](#data-flow)
 
-## Package and Imports
+## Overview
+The `cinterface.go` code provides a mechanism to:
+1. Initialize communication pipes.
+2. Receive data packets from a C program.
+3. Send data packets to a C program.
+4. Close the communication pipes.
+
+## Constants and Types
+
+### Constants
+
+- `PIPE_NAME_TO_C`: Named pipe for sending data to the C program.
+- `PIPE_NAME_FROM_C`: Named pipe for receiving data from the C program.
+- `SET_ZOOM_LEVEL`: ID representing a command to set the zoom level.
+- `SET_COLOR_SCHEME`: ID representing a command to set the color scheme.
+- `CHARGE_PACKET`: ID representing a packet for battery charge info.
+- `MaxPayloadSize`: Maximum payload size for a packet.
+
+### Packet Structure
+
+The `Packet` structure defines the blueprint for the packets exchanged between the Go program and the C program.
 
 ```go
-// Package declaration
-package main
-
-import (
-	"encoding/binary" // Used for binary data encoding
-	"os"              // Used for file handling
-	"time"            // Import time for sleep
-)
-```
-
-The file imports three packages:
-- `encoding/binary`: For encoding and decoding binary data.
-- `os`: For file handling, specifically for managing named pipes.
-- `time`: For controlling sleep time between retries when opening pipes.
-
-## Constants and Type Definitions
-
-```go
-const (
-	PIPE_NAME_TO_C   = "/tmp/toC"
-	PIPE_NAME_FROM_C = "/tmp/fromC"
-	SET_ZOOM_LEVEL   = 1
-	SET_COLOR_SCHEME = 2
-	CHARGE_PACKET    = 3
-	PayloadSize      = 64
-)
-
 type Packet struct {
 	ID      uint32
-	Payload [PayloadSize]byte
+	Payload [MaxPayloadSize]byte
 }
 ```
 
-- Named pipes are defined with paths `/tmp/toC` and `/tmp/fromC`.
-- Constants for different packet types are defined, such as `SET_ZOOM_LEVEL`, `SET_COLOR_SCHEME`, and `CHARGE_PACKET`.
-- `Packet` struct represents the structure of a communication packet, with an ID and a payload.
+## Global Variables
 
-## Initialization of Pipes
+- `pipeToC`: File pointer for the pipe that sends data to the C program.
+- `pipeFromC`: File pointer for the pipe that receives data from the C program.
+- `readBuffer`: Buffer that holds the data read from the C program.
 
-```go
-func initPipes() {
-	// ...
-}
-```
+## Functions
 
-The `initPipes` function initializes the named pipes for communication with the C program. It opens the pipes for reading and writing, with retries in case of failure.
+### initPipes
 
-## Receiving Packets from C
+This function initializes the named pipes required for communication. It waits until both the send and receive pipes are available.
 
-```go
-func ReceivePacketFromC() (*Packet, error) {
-	// ...
-}
-```
+### ReceivePacketFromC
 
-The `ReceivePacketFromC` function reads a packet from the C program through the named pipe. It extracts the ID and payload from the received data and returns a `Packet` struct.
+This function reads data from the C program through the named pipe, `PIPE_NAME_FROM_C`. It decodes the received data and constructs a `Packet` from it. If there's an error or the read buffer does not contain a full packet, the function handles it gracefully and continues reading.
 
-## Sending Packets to C
+### SendPacketToC
 
-```go
-func SendPacketToC(packetID uint32, value int32) error {
-	// ...
-}
-```
+This function allows the Go program to send data to the C program. It accepts a packet ID and a value, encodes it into COBS (Consistent Overhead Byte Stuffing) format, and then sends it through the named pipe, `PIPE_NAME_TO_C`.
 
-The `SendPacketToC` function sends a packet to the C program through the named pipe. It constructs the packet with the given ID and value, then writes it to the pipe.
+### closePipes
 
-## Closing Pipes
+This function closes the named pipes, effectively ending the communication between the Go and C programs.
 
-```go
-func closePipes() {
-	pipeToC.Close()
-	pipeFromC.Close()
-}
-```
+## Data Flow
 
-The `closePipes` function closes both named pipes, releasing the resources.
-
-## Channel Data Flow
-
-1. **Initialization**: The named pipes are initialized using `initPipes`.
-2. **Sending to C**: The Go program sends commands to the C program using `SendPacketToC`. This could include setting zoom levels or color schemes.
-3. **Receiving from C**: The Go program receives data from the C program using `ReceivePacketFromC`. This could include receiving charge levels or other information.
-4. **Closing**: The pipes are closed using `closePipes` when communication is no longer needed.
+1. The Go program initializes the named pipes using `initPipes`.
+2. The Go program waits for data from the C program using `ReceivePacketFromC`. The data is buffered until a complete packet (up to the delimiter) is received.
+3. When a complete packet is detected in the buffer, it's decoded from its COBS format.
+4. The Go program can send data to the C program using `SendPacketToC`. The data is encoded into COBS format and then sent.
+5. To end the communication, the Go program closes the pipes using `closePipes`.

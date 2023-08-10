@@ -1,118 +1,83 @@
-# Table of Contents
+# Readme.md
+
+## Table of Contents
+
 - [Overview](#overview)
-- [Constants and Data Structures](#constants-and-data-structures)
-- [Command Handlers](#command-handlers)
-  - [Zoom Level Handler](#zoom-level-handler)
-  - [Color Scheme Handler](#color-scheme-handler)
-- [Command Processing](#command-processing)
-- [Thread Functions](#thread-functions)
-  - [Handling Commands](#handling-commands)
-  - [Updating Charge](#updating-charge)
-- [Main Function](#main-function)
-- [Channel Data Flow](#channel-data-flow)
+- [Prerequisites](#prerequisites)
+- [Data Flow](#data-flow)
+- [Functions](#functions)
+    - [handleZoomLevel](#handlezoomlevel)
+    - [handleColorScheme](#handlecolorscheme)
+    - [processCommand](#processcommand)
+    - [readUntilDelimiter](#readuntildelimiter)
+    - [drainPipe](#drainpipe)
+    - [handleCommands](#handlecommands)
+    - [updateCharge](#updatecharge)
+    - [main](#main)
 
-# Overview
-The code snippet represents a multi-threaded C program that communicates with other processes through named pipes. It handles commands to set zoom levels and color schemes for a thermal camera and periodically sends updates on the charge level.
+## Overview
 
-# Constants and Data Structures
-```c
-#define PIPE_NAME_TO_C "/tmp/toC"
-#define PIPE_NAME_FROM_C "/tmp/fromC"
-#define SET_ZOOM_LEVEL 1
-#define SET_COLOR_SCHEME 2
-#define CHARGE_PACKET 3
-#define PayloadSize 64
+This C program acts as an intermediary that communicates with a Go process via named pipes. The program processes commands from the Go program and updates a simulated charge status back to it. The code uses COBS (Consistent Overhead Byte Stuffing) for encoding and decoding the data before sending and after receiving it via pipes.
 
-typedef struct {
-  uint32_t id;
-  char payload[PayloadSize];
-} Packet;
-```
-- Named pipes for communication to and from the C process.
-- Command IDs for setting zoom level, color scheme, and sending charge level.
-- Packet structure containing an ID and payload.
+## Prerequisites
 
-# Command Handlers
+- You should have a C compiler like GCC installed.
+- The `cobs.h` file (which isn't provided here) must be available for the code to work.
+- Named pipes are used for inter-process communication. Ensure your OS supports it (Linux does).
 
-## Zoom Level Handler
-```c
-void handleZoomLevel(Packet *packet) {
-  int32_t zoomLevel = *(int32_t *)packet->payload;
-  printf("[C] SetZoomLevel command received with level: %d\n", zoomLevel);
-  *(int32_t *)packet->payload = zoomLevel;
-}
-```
-- Extracts the zoom level from the payload.
-- Prints the received zoom level.
-- Assigns the same value back as a dummy operation.
+## Data Flow
 
-## Color Scheme Handler
-```c
-void handleColorScheme(Packet *packet) {
-  int32_t colorScheme = *(int32_t *)packet->payload;
-  printf("[C] SetColorScheme command received with scheme: %d\n", colorScheme);
-  *(int32_t *)packet->payload = colorScheme;
-}
-```
-- Extracts the color scheme from the payload.
-- Prints the received color scheme.
-- Assigns the same value back as a dummy operation.
+1. **Initialization**: The main program starts and initializes two named pipes: `/tmp/toC` and `/tmp/fromC`.
+2. **Thread Creation**: Two separate threads are created:
+    - `commandThread`: Listens for commands from the Go process and responds to them.
+    - `chargeThread`: Periodically updates the charge status back to the Go process.
+3. **Receiving Commands**: The `commandThread` reads data from the `/tmp/toC` pipe until it encounters a delimiter (0-byte). After decoding the COBS-encoded data, it processes the command.
+4. **Sending Responses**: After processing, the data is COBS-encoded again and sent back via the `/tmp/fromC` pipe.
+5. **Updating Charge**: The `chargeThread` simulates charge updates by randomly generating a value between 0 and 100, COBS-encoding this data, and sending it back to the Go process.
 
-# Command Processing
-```c
-void processCommand(Packet *packet) {
-  switch (packet->id) {
-  case SET_ZOOM_LEVEL:
-    handleZoomLevel(packet);
-    break;
-  case SET_COLOR_SCHEME:
-    handleColorScheme(packet);
-    break;
-  }
-  fflush(stdout);
-}
-```
-- Calls the appropriate handler based on the command ID.
-- Flushes the stdout buffer to print log messages immediately.
+## Functions
 
-# Thread Functions
+### handleZoomLevel
 
-## Handling Commands
-```c
-void *handleCommands(void *args) {
-  // ...
-}
-```
-- Opens named pipes for reading commands and writing responses.
-- Reads command packets from the pipe.
-- Processes the command using the appropriate handler.
-- Writes the response packet back to the pipe.
-- Closes the pipes.
+- Processes the `SET_ZOOM_LEVEL` command.
+- Parameters: A `Packet` pointer containing the command.
+- Returns: The size of the processed payload.
 
-## Updating Charge
-```c
-void *updateCharge(void *args) {
-  // ...
-}
-```
-- Opens the named pipe for writing charge updates.
-- Generates random charge values and writes them to the pipe.
-- Closes the write pipe.
+### handleColorScheme
 
-# Main Function
-```c
-int main() {
-  // ...
-}
-```
-- Removes any existing named pipes.
-- Creates new named pipes with read/write permissions.
-- Creates threads to handle incoming commands and update the charge.
-- Waits for the threads to terminate.
-- Removes the named pipes.
+- Processes the `SET_COLOR_SCHEME` command.
+- Parameters: A `Packet` pointer containing the command.
+- Returns: The size of the processed payload.
 
-# Channel Data Flow
-1. **Commands to C Process**: Commands are sent to the C process through the named pipe `/tmp/toC`. These include setting zoom levels and color schemes.
-2. **Responses from C Process**: Responses are sent from the C process through the named pipe `/tmp/fromC`. These include acknowledgments of the received commands.
-3. **Charge Updates**: Periodic charge updates are sent from the C process through the named pipe `/tmp/fromC`.
-4. **Synchronization**: A mutex (`pipe_mutex`) is used to synchronize access to the pipes among different threads.
+### processCommand
+
+- Processes the command by checking its ID and delegating to the appropriate handler.
+- Parameters: A `Packet` pointer containing the command.
+- Returns: The size of the processed payload.
+
+### readUntilDelimiter
+
+- Reads data from the given file descriptor until it encounters a delimiter.
+- Parameters: File descriptor, buffer to store data, maximum size.
+- Returns: Number of bytes read.
+
+### drainPipe
+
+- Drains excess bytes from the pipe if the `MAX_BUFFER_SIZE` is reached without encountering a delimiter.
+- Parameters: File descriptor.
+- Returns: Number of bytes drained.
+
+### handleCommands
+
+- Main function for the `commandThread`.
+- Listens for commands from the Go process and responds to them.
+
+### updateCharge
+
+- Main function for the `chargeThread`.
+- Periodically sends a simulated charge status back to the Go process.
+
+### main
+
+- Main entry point for the program.
+- Initializes named pipes and threads, then waits for threads to complete.
