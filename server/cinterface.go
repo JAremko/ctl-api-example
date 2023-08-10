@@ -1,87 +1,129 @@
-// Package declaration
 package main
 
 import (
-	"encoding/binary" // Used for binary data encoding
-	"os"              // Used for file handling
-	"time"            // Import time for sleep
+	"encoding/binary"
+	"fmt"
+	"os"
+	"time"
+	"bytes"
 )
 
-// Constants used for defining various communication properties
+// Constants
 const (
-	PIPE_NAME_TO_C   = "/tmp/toC"   // Name of the pipe to send data to the C program
-	PIPE_NAME_FROM_C = "/tmp/fromC" // Name of the pipe to receive data from the C program
-	SET_ZOOM_LEVEL   = 1            // ID for the command to set the zoom level
-	SET_COLOR_SCHEME = 2            // ID for the command to set the color scheme
-	CHARGE_PACKET    = 3            // ID for the charge packet
-	PayloadSize      = 64           // Size of the payload in bytes
+	PIPE_NAME_TO_C   = "/tmp/toC"
+	PIPE_NAME_FROM_C = "/tmp/fromC"
+	SET_ZOOM_LEVEL   = 1
+	SET_COLOR_SCHEME = 2
+	CHARGE_PACKET    = 3
+	MaxPayloadSize   = 1024
 )
 
-// Packet represents the structure of a communication packet
 type Packet struct {
-	ID      uint32            // ID to uniquely identify the type of packet
-	Payload [PayloadSize]byte // Payload to carry the data of the packet
+	ID      uint32
+	Payload [MaxPayloadSize]byte
 }
 
-var pipeToC *os.File   // File handle for the named pipe to send data to the C program
-var pipeFromC *os.File // File handle for the named pipe to receive data from the C program
+var pipeToC *os.File
+var pipeFromC *os.File
 
-// initPipes initializes the named pipes for communication with the C program.
 func initPipes() {
 	var err error
 	for {
-		pipeFromC, err = os.Open(PIPE_NAME_FROM_C) // Open the named pipe for reading from the C program
+		pipeFromC, err = os.Open(PIPE_NAME_FROM_C)
 		if err == nil {
 			break
 		}
-		time.Sleep(1 * time.Second) // Sleep for 1 second before retrying
+		time.Sleep(1 * time.Second)
 	}
 	for {
-		pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe) // Open the named pipe for writing to the C program
+		pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe)
 		if err == nil {
 			break
 		}
-		time.Sleep(1 * time.Second) // Sleep for 1 second before retrying
+		time.Sleep(1 * time.Second)
 	}
 }
 
-// ReceivePacketFromC reads a packet from the C program through the named pipe.
+var readBuffer = make([]byte, 0, 2*MaxPayloadSize)  // Double the max expected size for safety
+
 func ReceivePacketFromC() (*Packet, error) {
-	var packet Packet
-	// Buffer to hold the data; 4 bytes for uint32 ID to uniquely identify the type of packet, and PayloadSize for the actual payload data
-	var buf [4 + PayloadSize]byte
-	if _, err := pipeFromC.Read(buf[:]); err != nil { // Read from the pipe
-		pipeFromC.Close()
-		pipeFromC, _ = os.Open(PIPE_NAME_FROM_C) // Reopen the pipe if an error occurs
-		return nil, err
-	}
-	packet.ID = binary.LittleEndian.Uint32(buf[:4]) // Extract the 4-byte ID
-	copy(packet.Payload[:], buf[4:])                // Copy the rest as payload
-	return &packet, nil
-}
+	// Small buffer for reading. We read in small chunks to ensure we don't miss any delimiters.
+	tmpBuf := make([]byte, 256)
 
-// SendPacketToC sends a packet to the C program through the named pipe.
-func SendPacketToC(packetID uint32, value int32) error {
-	var packet Packet
-	packet.ID = packetID                                             // Set the packet ID
-	binary.LittleEndian.PutUint32(packet.Payload[:4], uint32(value)) // Store the 4-byte value in the payload
-	// Buffer to hold the data, including 4 bytes for the uint32 ID, and PayloadSize for the payload
-	var buf [4 + PayloadSize]byte
-	binary.LittleEndian.PutUint32(buf[:4], packet.ID) // Place the ID in the buffer
-	copy(buf[4:], packet.Payload[:])                  // Copy the payload into the buffer
-	_, err := pipeToC.Write(buf[:])                   // Write to the named pipe
-	if err != nil {
-		pipeToC.Close()
-		pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe) // Reopen the pipe if an error occurs
+	for {
+		n, err := pipeFromC.Read(tmpBuf)
 		if err != nil {
-			return err // Return error if reopening fails
+			pipeFromC.Close()
+			pipeFromC, _ = os.Open(PIPE_NAME_FROM_C)
+			return nil, err
+		}
+
+		// Append to our readBuffer
+		readBuffer = append(readBuffer, tmpBuf[:n]...)
+
+		// Check for delimiter
+		if idx := bytes.IndexByte(readBuffer, 0); idx != -1 {
+			// Split the buffer at the delimiter
+			packetData := readBuffer[:idx]
+			readBuffer = readBuffer[idx+1:]
+
+			decodedBuffer, err := Decode(packetData)
+			if err != nil {
+				return nil, err
+			}
+
+			fmt.Printf("[Go] Decoded buffer: %x\n", decodedBuffer)
+
+			if len(decodedBuffer) < 4 {
+				return nil, fmt.Errorf("Decoded packet size mismatch. Expected at least 4 bytes, got %d bytes", len(decodedBuffer))
+			}
+
+			var packet Packet
+			packet.ID = binary.LittleEndian.Uint32(decodedBuffer[:4])
+			copy(packet.Payload[:], decodedBuffer[4:])
+
+			return &packet, nil
 		}
 	}
-	return nil // Return no error if successful
+
+	return nil, fmt.Errorf("Unreachable code")
 }
 
-// closePipes closes both named pipes, releasing the resources.
+
+func SendPacketToC(packetID uint32, value int32) error {
+    var buf [4 + 4]byte  // ID + value (which is 4 bytes)
+
+    binary.LittleEndian.PutUint32(buf[:4], packetID)
+    binary.LittleEndian.PutUint32(buf[4:], uint32(value))
+
+    cobsBuffer := Encode(buf[:])
+
+    if cobsBuffer == nil {
+        return fmt.Errorf("Failed to encode COBS for buffer of size %d", 4+4)
+    }
+
+    fmt.Printf("[Go] Sending COBS buffer: %x\n", cobsBuffer)
+
+    _, err := pipeToC.Write(cobsBuffer)
+    if err != nil {
+        pipeToC.Close()
+        pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe)
+        if err != nil {
+            return err
+        }
+    }
+
+    // Write the delimiter
+    _, err = pipeToC.Write([]byte{0})
+    if err != nil {
+        return err
+    }
+
+    return nil
+}
+
+
 func closePipes() {
-	pipeToC.Close()   // Close the named pipe to C
-	pipeFromC.Close() // Close the named pipe from C
+	pipeToC.Close()
+	pipeFromC.Close()
 }

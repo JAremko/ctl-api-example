@@ -23,6 +23,7 @@ COPY server/main.go .
 COPY server/state.go .
 COPY server/cinterface.go .
 COPY server/handlers.go .
+COPY server/cobs.go .
 
 # Download all dependencies
 RUN go get github.com/gorilla/websocket

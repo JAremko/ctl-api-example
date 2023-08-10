@@ -20,7 +20,7 @@ This repository contains a client-server application demonstrating the use of Pr
 
 ## Repository Structure
 
-- `/server`: Contains the Go server code (`main.go`, `handlers.go`, `state.go` and `cinterface.go`) and C code (`main.c`).
+- `/server`: Contains the Go server and C server code.
 - `/client`: Contains the frontend JavaScript code (`client.js`) and HTML (`ctl.html` and `index.html`).
 - `thermalcamera.proto`: The Protobuf schema defining messages.
 - `Dockerfile.client`, `Dockerfile.go-server`, `Dockerfile.c-server`: Dockerfiles used to build the client, Go server, and C server containers respectively.
