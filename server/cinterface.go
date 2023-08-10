@@ -44,10 +44,10 @@ func initPipes() {
 	}
 }
 
-var readBuffer = make([]byte, 0, 2*MaxPayloadSize)  // Double the max expected size for safety
+var readBuffer = make([]byte, 0, MaxPayloadSize)
 
 func ReceivePacketFromC() (*Packet, error) {
-	// Small buffer for reading. We read in small chunks to ensure we don't miss any delimiters.
+	// Small buffer for reading.
 	tmpBuf := make([]byte, 256)
 
 	for {
@@ -61,33 +61,40 @@ func ReceivePacketFromC() (*Packet, error) {
 		// Append to our readBuffer
 		readBuffer = append(readBuffer, tmpBuf[:n]...)
 
-		// Check for delimiter
-		if idx := bytes.IndexByte(readBuffer, 0); idx != -1 {
-			// Split the buffer at the delimiter
-			packetData := readBuffer[:idx]
-			readBuffer = readBuffer[idx+1:]
+		for { // Inner loop to process multiple packets within the same readBuffer
+			// Check for delimiter
+			if idx := bytes.IndexByte(readBuffer, 0); idx != -1 {
+				// Split the buffer at the delimiter
+				packetData := readBuffer[:idx]
+				readBuffer = readBuffer[idx+1:]
 
-			decodedBuffer, err := Decode(packetData)
-			if err != nil {
-				return nil, err
+				decodedBuffer, err := Decode(packetData)
+				if err != nil {
+					return nil, err
+				}
+
+				fmt.Printf("[Go] Decoded buffer: %x\n", decodedBuffer)
+
+				if len(decodedBuffer) < 4 {
+					return nil, fmt.Errorf("Decoded packet size mismatch. Expected at least 4 bytes, got %d bytes", len(decodedBuffer))
+				}
+
+				var packet Packet
+				packet.ID = binary.LittleEndian.Uint32(decodedBuffer[:4])
+				copy(packet.Payload[:], decodedBuffer[4:])
+
+				return &packet, nil
+
+			} else {
+				// No more delimiters found in the current readBuffer
+				break
 			}
-
-			fmt.Printf("[Go] Decoded buffer: %x\n", decodedBuffer)
-
-			if len(decodedBuffer) < 4 {
-				return nil, fmt.Errorf("Decoded packet size mismatch. Expected at least 4 bytes, got %d bytes", len(decodedBuffer))
-			}
-
-			var packet Packet
-			packet.ID = binary.LittleEndian.Uint32(decodedBuffer[:4])
-			copy(packet.Payload[:], decodedBuffer[4:])
-
-			return &packet, nil
 		}
 	}
 
 	return nil, fmt.Errorf("Unreachable code")
 }
+
 
 
 func SendPacketToC(packetID uint32, value int32) error {

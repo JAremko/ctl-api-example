@@ -135,7 +135,6 @@ void *handleCommands(void *args) {
         printf("\n");
 
         pthread_mutex_lock(&pipe_mutex);
-        printf("aquired pipe mutes");
         if (write(pipeFromC, encodedBuffer, encodeRes.out_len) < 0 ||
             write(pipeFromC, "\0", 1) < 0) {  // Include delimiter after COBS-encoded data
             perror("[C] Error writing to pipe");
@@ -143,7 +142,6 @@ void *handleCommands(void *args) {
             break;
         }
         pthread_mutex_unlock(&pipe_mutex);
-        printf("released pipe mutes");
     }
 
     close(pipeToC);
