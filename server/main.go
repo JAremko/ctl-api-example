@@ -1,9 +1,9 @@
 package main
 
 import (
-	"log"             // Logging package
-	"net/http"        // Package for HTTP server implementation
-	"sync"            // Package to handle synchronization
+	"log"      // Logging package
+	"net/http" // Package for HTTP server implementation
+	"sync"     // Package to handle synchronization
 
 	"github.com/JAremko/ctl-api-example/thermalcamera" // Importing Protobuf definitions
 	"github.com/golang/protobuf/proto"                 // Protobuf encoding and decoding package

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"sync"            // Package to handle synchronization
 	"github.com/JAremko/ctl-api-example/thermalcamera" // Importing Protobuf definitions
+	"sync"                                             // Package to handle synchronization
 )
 
 // DefaultState defines the default state of the thermal camera

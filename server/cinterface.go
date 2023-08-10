@@ -1,11 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"os"
 	"time"
-	"bytes"
 )
 
 // Constants
@@ -95,40 +95,37 @@ func ReceivePacketFromC() (*Packet, error) {
 	return nil, fmt.Errorf("Unreachable code")
 }
 
-
-
 func SendPacketToC(packetID uint32, value int32) error {
-    var buf [4 + 4]byte  // ID + value (which is 4 bytes)
+	var buf [4 + 4]byte // ID + value (which is 4 bytes)
 
-    binary.LittleEndian.PutUint32(buf[:4], packetID)
-    binary.LittleEndian.PutUint32(buf[4:], uint32(value))
+	binary.LittleEndian.PutUint32(buf[:4], packetID)
+	binary.LittleEndian.PutUint32(buf[4:], uint32(value))
 
-    cobsBuffer := Encode(buf[:])
+	cobsBuffer := Encode(buf[:])
 
-    if cobsBuffer == nil {
-        return fmt.Errorf("Failed to encode COBS for buffer of size %d", 4+4)
-    }
+	if cobsBuffer == nil {
+		return fmt.Errorf("Failed to encode COBS for buffer of size %d", 4+4)
+	}
 
-    fmt.Printf("[Go] Sending COBS buffer: %x\n", cobsBuffer)
+	fmt.Printf("[Go] Sending COBS buffer: %x\n", cobsBuffer)
 
-    _, err := pipeToC.Write(cobsBuffer)
-    if err != nil {
-        pipeToC.Close()
-        pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe)
-        if err != nil {
-            return err
-        }
-    }
+	_, err := pipeToC.Write(cobsBuffer)
+	if err != nil {
+		pipeToC.Close()
+		pipeToC, err = os.OpenFile(PIPE_NAME_TO_C, os.O_WRONLY, os.ModeNamedPipe)
+		if err != nil {
+			return err
+		}
+	}
 
-    // Write the delimiter
-    _, err = pipeToC.Write([]byte{0})
-    if err != nil {
-        return err
-    }
+	// Write the delimiter
+	_, err = pipeToC.Write([]byte{0})
+	if err != nil {
+		return err
+	}
 
-    return nil
+	return nil
 }
-
 
 func closePipes() {
 	pipeToC.Close()

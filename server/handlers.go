@@ -22,7 +22,6 @@ func HandleSetColorScheme(scheme thermalcamera.ColorScheme) {
 	SendPacketToC(SET_COLOR_SCHEME, int32(scheme))
 }
 
-
 /// Data from C pipes
 
 // HandlePacketsFromC handles packets received from C and broadcasts them
